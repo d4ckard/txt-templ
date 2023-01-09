@@ -121,7 +121,24 @@ impl ContentTokens {
                 },
                 ContentToken::Option(key_box) => {
                     // TODO: Rn `option` is just a wrapper around `key`. Give `option` it's own logic!
-                    return fill_out_token(*key_box, content, output);
+                    // What is supposed to happen to an option entry which was entered by a user?
+                    // 1. The possible identifiers for an option as well as for a constant shoud be finite.
+                    //     That means all possible values will need to be pre-definded.
+                    // This raises the question: where will the values be pre-defined?
+                    // Most likely the pre-definition would happen in another input to fill_out and/or draft (what should this input be called?)
+                    // TODO: Reject constants and options if they are not offered by the new input source.
+                    let (ident, default_box) = match *key_box {
+                        ContentToken::Key(ident, default_box) => (ident, default_box),
+                        _ => panic!("ContentToken::Option did not contain a ContentToken::Key instance. `parse::option` should not allow this!"),
+                    };
+                    match content.get(TokenIdent::new(ident.as_ref(), Token::Option)) {
+                        // Some(content) if valid_option(content, /* Valid options input */) => output.push_str(content),
+                        Some(_) => return Err(FillOutError::EmptyContent(ident)),
+                        None => match default_box {
+                            Some(default_box) => return fill_out_token(*default_box, content, output),
+                            None => return Err(FillOutError::MissingOption(ident)),
+                        }
+                    }
                 },
             }
             Ok(())
@@ -178,12 +195,30 @@ impl std::str::FromStr for ContentTokens {
 #[derive(thiserror::Error, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FillOutError {
+    #[error("The given content is missing an option with the name {0}")]
+    MissingOption(Ident),
     #[error("The given content is missing a constant with the name {0}")]
     MissingConstant(Ident),
     #[error("The given content is missing a key with the name {0}")]
     MissingKey(Ident),
+    #[error("The chosen option for ident {0} is invalid. Valid option ident are {1}")]
+    InvalidOption(Ident, Idents),
+    #[error("The chosen constant for ident {0} is invalid. Valid constant ident are {1}")]
+    InvalidConstant(Ident, Idents),
     #[error("The given content for the entry with the identifier {0} is empty")]
     EmptyContent(Ident),
+}
+
+#[derive(Debug)]
+pub struct Idents(Vec<Ident>);
+
+impl std::fmt::Display for Idents {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        for ident in self.0.iter() {
+            write!(f, "{}", ident)?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
