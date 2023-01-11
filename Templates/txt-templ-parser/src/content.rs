@@ -11,31 +11,41 @@ use serde::{Serialize, Deserialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ContentMap(
     #[cfg_attr(feature = "serde", serde_as(as = "Vec<(_, _)>"))]
-    HashMap<TokenIdent, String>
+    HashMap<Token, HashMap<Ident, String>>,
 );
 
 impl ContentMap {
     pub fn new() -> Self {
-        let map: HashMap<TokenIdent, String> = HashMap::new();
-        Self(map)
+        Self(HashMap::new())
     }
 
     pub fn insert(&mut self, token: TokenIdent, content: String) {
-        self.0.insert(token, content);
+        match self.0.get_mut(&token.1) {
+            Some(idents) => { idents.insert(token.0, content); },
+            None => {
+                let mut map: HashMap<Ident, String> = HashMap::new();
+                map.insert(token.0, content);
+                self.0.insert(token.1, map);
+            },
+        };
     }
 
     pub fn get(&self, token: TokenIdent) -> Option<&String> {
-        self.0.get(&token)
+        if let Some(type_entries) = self.0.get(&token.1) {
+            type_entries.get(&token.0)
+        } else {
+            None
+        }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct TokenIdent(String, Token);
+pub struct TokenIdent(Ident, Token);
 
 impl TokenIdent {
     pub fn new(ident: &str, token: Token) -> Self {
-        Self(ident.to_owned(), token)
+        Self(Ident::new(ident), token)
     }
 }
 
@@ -120,19 +130,12 @@ impl ContentTokens {
                     }
                 },
                 ContentToken::Option(key_box) => {
-                    // TODO: Rn `option` is just a wrapper around `key`. Give `option` it's own logic!
-                    // What is supposed to happen to an option entry which was entered by a user?
-                    // 1. The possible identifiers for an option as well as for a constant shoud be finite.
-                    //     That means all possible values will need to be pre-definded.
-                    // This raises the question: where will the values be pre-defined?
-                    // Most likely the pre-definition would happen in another input to fill_out and/or draft (what should this input be called?)
-                    // TODO: Reject constants and options if they are not offered by the new input source.
                     let (ident, default_box) = match *key_box {
                         ContentToken::Key(ident, default_box) => (ident, default_box),
                         _ => panic!("ContentToken::Option did not contain a ContentToken::Key instance. `parse::option` should not allow this!"),
                     };
                     match content.get(TokenIdent::new(ident.as_ref(), Token::Option)) {
-                        // Some(content) if valid_option(content, /* Valid options input */) => output.push_str(content),
+                        Some(content) if !content.is_empty() => output.push_str(&content),
                         Some(_) => return Err(FillOutError::EmptyContent(ident)),
                         None => match default_box {
                             Some(default_box) => return fill_out_token(*default_box, content, output),
@@ -171,7 +174,17 @@ impl ContentTokens {
                     }
                 },
                 ContentToken::Option(key_box) => {
-                    draft_token(&*key_box, map);
+                    let (ident, default_box) = match &**key_box {
+                        ContentToken::Key(ident, default_box) => (ident, default_box),
+                        _ => panic!("ContentToken::Option did not contain a ContentToken::Key instance. `parse::option` should not allow this!"),
+                    };
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Option), "".to_owned());
+                    match default_box {
+                        Some(default_box) => draft_token(&*default_box, map),
+                        None => return,
+                    }
+                    // TODO: Add tests for new functionallity and ensure this actually prevents the
+                    // use of unspecified option identifiers
                 },
             }
         }
