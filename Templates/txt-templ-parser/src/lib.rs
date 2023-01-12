@@ -26,60 +26,51 @@ mod tests {
     use unic_locale::Locale;
     use super::*;
 
-    #[test]
-    fn fill_out_works() {
-        let variants = vec![
-            ("Hallo Paul", "Hallo {name}".parse::<ContentTokens>().unwrap(), vec![(TokenIdent::new("name", Token::Key), "Paul")]),
-            ("a Leto b Paul", "a {other} b $name".parse().unwrap(), vec![
-                (TokenIdent::new("other", Token::Key), "Leto"),
-                (TokenIdent::new("name", Token::Constant), "Paul"),
-            ]),
-            ("a Leto b Paul", "a {other:Leto} b $name".parse().unwrap(), vec![
-                (TokenIdent::new("name", Token::Constant), "Paul")
-            ]),
-            ("a Leto b Paul", "a {other:{othername:Leto}} b $name".parse().unwrap(), vec![
-                (TokenIdent::new("name", Token::Constant), "Paul")
-            ]),
-        ];
-                                         
-        for (expected, tokens, pairs) in variants {
-            let content = helper::content_map_from_vec(pairs);
-            let output = tokens.fill_out(content);
-            assert_eq!(&output.unwrap(), expected);
-        }
-    }
-
-    #[test]
-    fn draft_works() {
-        let variants = vec![
-            ("a {name} b $Bye".parse::<ContentTokens>().unwrap(), vec![
-                (TokenIdent::new("name", Token::Key), ""),
-                (TokenIdent::new("Bye", Token::Constant), ""),
-            ]),
-            ("{other:{othername:Leto}}".parse::<ContentTokens>().unwrap(), vec![
-                (TokenIdent::new("other", Token::Key), ""),
-                (TokenIdent::new("othername", Token::Key), ""),
-            ]),
-        ];
-        for (tokens, pairs) in variants {
-            let expected = helper::content_map_from_vec(pairs);
-            let output = tokens.draft();
-            assert_eq!(expected, output);
-        }
-    }
-
-    #[test]
-    fn fill_out_rejects_ummodified_drafs() {
-        let tokens: ContentTokens = "a {name} b $Const".parse().unwrap();
-        let draft = tokens.draft();
-        // While a draft contains all required keys, it's missing any content!
-        // Therefore `fill_out` should always reject a raw draft.
-        assert!(tokens.fill_out(draft).is_err());
-    }
-
-
     mod correct {
         use super::*;
+
+        #[test]
+        fn fill_out_works() {
+            let variants = vec![
+                ("Hallo Paul", "Hallo {name}".parse::<ContentTokens>().unwrap(), vec![(TokenIdent::new("name", Token::Key), "Paul")]),
+                ("a Leto b Paul", "a {other} b $name".parse().unwrap(), vec![
+                    (TokenIdent::new("other", Token::Key), "Leto"),
+                    (TokenIdent::new("name", Token::Constant), "Paul"),
+                ]),
+                ("a Leto b Paul", "a {other:Leto} b $name".parse().unwrap(), vec![
+                    (TokenIdent::new("name", Token::Constant), "Paul")
+                ]),
+                ("a Leto b Paul", "a {other:{othername:Leto}} b $name".parse().unwrap(), vec![
+                    (TokenIdent::new("name", Token::Constant), "Paul")
+                ]),
+            ];
+                                         
+            for (expected, tokens, pairs) in variants {
+                let content = helper::content_map_from_vec(pairs);
+                let output = tokens.fill_out(content);
+                assert_eq!(&output.unwrap(), expected);
+            }
+        }
+
+        #[test]
+        fn draft_works() {
+            let variants = vec![
+                ("a {name} b $Bye".parse::<ContentTokens>().unwrap(), vec![
+                    (TokenIdent::new("name", Token::Key), ""),
+                    (TokenIdent::new("Bye", Token::Constant), ""),
+                ]),
+                ("{other:{othername:Leto}}".parse::<ContentTokens>().unwrap(), vec![
+                    (TokenIdent::new("other", Token::Key), ""),
+                    (TokenIdent::new("othername", Token::Key), ""),
+                ]),
+            ];
+            for (tokens, pairs) in variants {
+                let expected = helper::content_map_from_vec(pairs);
+                let output = tokens.draft();
+                assert_eq!(expected, output);
+            }
+        }
+
 
         #[test]
         fn locales_are_accepted() {
@@ -157,6 +148,15 @@ mod tests {
 
     mod incorrect {
         use super::*;
+
+        #[test]
+        fn fill_out_rejects_ummodified_drafs() {
+            let tokens: ContentTokens = "a {name} b $Const".parse().unwrap();
+            let draft = tokens.draft();
+            // While a draft contains all required keys, it's missing any content!
+            // Therefore `fill_out` should always reject a raw draft.
+            assert!(tokens.fill_out(draft).is_err());
+        }
 
         #[test]
         fn keys_are_rejected() {
