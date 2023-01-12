@@ -7,10 +7,39 @@ use crate::parse::UserError;
 use crate::scan::Scanner;
 use once_cell::sync::Lazy;
 
+// TODO: Create a semi-permanent user state holding pre-defined constants and options
 
 static LOGGING: Lazy<()> = Lazy::new(|| {
     env_logger::init();
 });
+
+pub struct Template{
+    tokens: ContentTokens,
+    map: Option<ContentMap>,
+}
+
+impl Template {
+    /// Create a new template by parsing to given string
+    pub fn parse(s: &str) -> Result<Self, UserError> {
+        match parse_str(s) {
+            Ok(tokens) => Ok(Self{ tokens, map: None }),
+            Err(e) => Err(e)
+        }
+    }
+
+    /// Create a new temmplate from a given `ContentTokens` instance 
+    pub fn from(t: ContentTokens) -> Self {
+        Self{ tokens: t, map: None }
+    }
+
+    /// Check the template for the required entires
+    pub fn draft(&mut self) {
+        self.map = Some(self.tokens.draft())
+    }
+
+    // TODO: Add an interface to set keys and select options.
+    // This will enable finally checking the semantics.
+}
 
 // Attempt to parse the given string into a `ContentTokens` instance
 pub fn parse_str(s: &str) -> Result<ContentTokens, UserError> {

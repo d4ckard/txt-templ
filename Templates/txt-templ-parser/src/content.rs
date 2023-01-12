@@ -6,6 +6,8 @@ use std::collections::HashMap;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 
+// TODO: Make `ContentMap` private to only allow setting custom keys
+// and choosing options
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", serde_with::serde_as)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
