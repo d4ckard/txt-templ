@@ -110,19 +110,6 @@ impl Scanner {
         }
     }
 
-    pub fn peek(&self, expected: char) -> bool {
-        match self.chars.get(self.cursor.at() + 1) {
-            Some(character) => {
-                if *character == expected {
-                    true
-                } else {
-                    false
-                }
-            },
-            None => false,
-        }
-    }
-
     pub fn take(&mut self, terminal: Terminals) -> Result<(), ScanError> {
         if let Some(character) = self.current_char() {
             if terminal as u8 as char == character {
