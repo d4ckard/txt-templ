@@ -10,11 +10,13 @@ use std::collections::HashMap;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContentState {
     pub constants: HashMap<Ident, String>,
     pub options: HashMap<Ident, HashMap<Ident, String>>,
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContent {
     pub keys: HashMap<Ident, String>,
     pub choices: HashMap<Ident, Ident>,
@@ -359,6 +361,7 @@ pub enum FillOutError {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Idents(Vec<Ident>);
 
 impl std::fmt::Display for Idents {

@@ -1,6 +1,7 @@
 use wasm_bindgen::prelude::*;
 extern crate console_error_panic_hook;
-use txt_templ_parser::{ContentTokens, ContentMap};
+use txt_templ_parser::template;
+use txt_templ_parser::content::{UserContent, UserContentState};
 
 #[wasm_bindgen]
 extern {
@@ -14,29 +15,28 @@ macro_rules! console_log {
 }
 
 #[wasm_bindgen]
-pub struct Template(ContentTokens);
+pub struct Template(template::Template);
 
 #[wasm_bindgen]
 impl Template {
-    pub fn parse(s: &str) -> Result<Template, String>{
+    pub fn parse(s: &str) -> Result<Template, String> {
         console_error_panic_hook::set_once();
-        match txt_templ_parser::parse_str(s) {
-            Ok(tokens) => Ok(Self(tokens)),
+        match template::Template::parse(s) {
+            Ok(templ) => Ok(Self(templ)),
             Err(e) => Err(serde_json::to_string(&e).unwrap()),
         }
     }
 
-    pub fn draft(&self) -> JsValue {
-        // Create a `ContentMap` containing all tokens required by the template
-        let map = self.0.draft();
-        serde_wasm_bindgen::to_value(&map).unwrap()
-    }
-
-    pub fn fill_out(self, val: JsValue) -> Result<String, String> {
-        let content: ContentMap = serde_wasm_bindgen::from_value(val).unwrap();
-        self.0.fill_out(content).or_else(|e| {
-            // Convert errors to JSON
-            Err(serde_json::to_string(&e).unwrap())
-        })
+    pub fn fill_out(
+        &self,
+        user_content: JsValue,
+        user_content_state: JsValue,
+    ) -> Result<String, String> {
+        let user_content: UserContent = serde_wasm_bindgen::from_value(user_content).unwrap();
+        let user_content_state: UserContentState = serde_wasm_bindgen::from_value(user_content_state).unwrap();
+        match self.0.fill_out(user_content, user_content_state) {
+            Ok(result) => Ok(result),
+            Err(e) => Err(serde_json::to_string(&e).unwrap()),
+        }
     }
 }
