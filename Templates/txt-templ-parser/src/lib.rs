@@ -1,13 +1,6 @@
-pub mod parse; 
-pub mod scan;
 pub mod content;
 pub mod template;
-
-use once_cell::sync::Lazy;
-
-static LOGGING: Lazy<()> = Lazy::new(|| {
-    env_logger::init();
-});
+mod utils;
 
 
 #[cfg(test)]
