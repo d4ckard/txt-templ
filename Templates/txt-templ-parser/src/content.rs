@@ -1,53 +1,148 @@
 use unic_locale::{Locale, locale};
-use crate::parse::UserError;
+use crate::parse::{template, UserError};
+use crate::scan::Scanner;
 use crate::LOGGING;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 
-// TODO: Make `ContentMap` private to only allow setting custom keys
-// and choosing options
+pub struct UserContentState {
+    pub constants: HashMap<Ident, String>,
+    pub options: HashMap<Ident, HashMap<Ident, String>>,
+}
+
+pub struct UserContent {
+    pub keys: HashMap<Ident, String>,
+    pub choices: HashMap<Ident, Ident>,
+}
+
+// TODO: Add defaults field to `Content`
+
+// Type containing ALL required content to  fill out a template
+#[derive(Debug)]
+pub struct Content(HashMap<Token, HashMap<Ident, String>>);
+
+impl Content {
+    pub fn get(&self, token: TokenIdent) -> &String {
+        match self.0.get(&token.token) {
+            Some(type_entries) => match type_entries.get(&token.ident) {
+                Some(entry) => entry,
+                None => panic!("Content was missing a requested entry {:?}", token),
+            },
+            None => panic!("Content was missing a requrest entry type {:?}", token),
+        }
+    }
+}
+
+// Map of all required tokens
+// This struct directly maps identifers to chosen content values
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "serde", serde_with::serde_as)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ContentMap(
+pub struct RequiredContent(
     #[cfg_attr(feature = "serde", serde_as(as = "Vec<(_, _)>"))]
     HashMap<Token, HashMap<Ident, String>>,
 );
 
-impl ContentMap {
+impl RequiredContent {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
     pub fn insert(&mut self, token: TokenIdent, content: String) {
-        match self.0.get_mut(&token.1) {
-            Some(idents) => { idents.insert(token.0, content); },
+        match self.0.get_mut(&token.token) {
+            Some(idents) => { idents.insert(token.ident, content); },
             None => {
                 let mut map: HashMap<Ident, String> = HashMap::new();
-                map.insert(token.0, content);
-                self.0.insert(token.1, map);
+                map.insert(token.ident, content);
+                self.0.insert(token.token, map);
             },
         };
     }
 
-    pub fn get(&self, token: TokenIdent) -> Option<&String> {
-        if let Some(type_entries) = self.0.get(&token.1) {
-            type_entries.get(&token.0)
-        } else {
-            None
+    pub fn add_constants(&mut self, mut constants: HashMap<Ident, String>) {
+        if let Some(entries) = self.0.get_mut(&Token::Constant) {
+            // Move every piece of content for each required identifier into
+            // the required constant entries.
+            for (ident, value) in entries {
+                if let Some(constant) = constants.remove(&ident) {
+                    *value = constant;
+                }
+            }
         }
+    }
+
+    pub fn add_options(&mut self, choices: HashMap<Ident, Ident>, mut options: HashMap<Ident, HashMap<Ident, String>>) {
+        if let Some(entries) = self.0.get_mut(&Token::Option) {
+            // Move every chosen piece of content for each required identifier into the
+            // required constant entries.
+            for (ident, value) in entries {
+                // Get the option for the current identifier
+                let option = match options.get_mut(&ident) {
+                    Some(option) => option,
+                    None => continue,
+                };
+                // Get the choosen option
+                if let Some(choice) = choices.get(&ident) {
+                    // The the content assoicates with the choice and move
+                    // it into the required optin entries under the identifier
+                    // for the option itself
+                    if let Some(content) = option.remove(&choice) {
+                        *value = content;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn add_keys(&mut self, mut keys: HashMap<Ident, String>) {
+        if let Some(entries) = self.0.get_mut(&Token::Key) {
+            // Mov every piece of content for each required key
+            // into the required key entries.
+            for (ident, value) in entries {
+                if let Some(key) = keys.remove(&ident) {
+                    *value = key;
+                }
+            }
+        }
+    }
+}
+
+impl TryInto<Content> for RequiredContent {
+    type Error = FillOutError;
+
+    fn try_into(self) -> Result<Content, Self::Error> {
+        // Check that there are entires without content
+        for (token_type, entries) in &self.0 {
+            for (ident, content) in entries {
+                if content.is_empty() {
+                    return match token_type {
+                        Token::Key => Err(FillOutError::MissingKey(ident.clone())),
+                        Token::Constant => Err(FillOutError::MissingConstant(ident.clone())),
+                        Token::Option => Err(FillOutError::MissingOption(ident.clone())),
+                    };
+                }
+            }
+        }
+        // Move all the entires into a new Content instance
+        Ok(Content( self.0 ))
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct TokenIdent(Ident, Token);
+pub struct TokenIdent {
+    pub ident: Ident,
+    pub token: Token,
+}
 
 impl TokenIdent {
     pub fn new(ident: &str, token: Token) -> Self {
-        Self(Ident::new(ident), token)
+        Self {
+            ident: Ident::new(ident),
+            token
+        }
     }
 }
 
@@ -57,6 +152,16 @@ pub enum Token {
     Key,
     Constant,
     Option,
+}
+
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Token::Key => write!(f, "Key"),
+            Token::Constant => write!(f, "Constant"),
+            Token::Option => write!(f, "Option"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -105,94 +210,117 @@ impl ContentTokens {
 
     // Use the content map to substitue all values in `tokens` until
     // the entire template has been filled out.
-    pub fn fill_out(self, content: ContentMap) -> Result<String, FillOutError> {
+    pub fn fill_out(&self, content: Content) -> Result<String, FillOutError> {
         Lazy::force(&LOGGING);
 
         let mut output = String::new();
 
         // Try to add the content for `token` to `output`
-        fn fill_out_token(token: ContentToken, content: &ContentMap, output: &mut String) -> Result<(), FillOutError> {
+        fn fill_out_token(token: &ContentToken, content: &Content, output: &mut String) -> Result<(), FillOutError> {
             match token {
                 ContentToken::Text(text) => output.push_str(&text),
                 ContentToken::Constant(ident) => {
-                    match content.get(TokenIdent::new(ident.as_ref(), Token::Constant)) {
-                        Some(content) if !content.is_empty() => output.push_str(content),
-                        Some(_) => return Err(FillOutError::EmptyContent(ident)),
-                        None => return Err(FillOutError::MissingConstant(ident)),
-                    }
+                    let content = content.get(TokenIdent::new(ident.as_ref(), Token::Constant));
+                    output.push_str(content);
                 },
-                ContentToken::Key(ident, default_box) => {
-                    match content.get(TokenIdent::new(ident.as_ref(), Token::Key)) {
-                        Some(content) if !content.is_empty() => output.push_str(content),
-                        Some(_) => return Err(FillOutError::EmptyContent(ident)),
-                        None => match default_box {
-                            Some(default_box) => return fill_out_token(*default_box, content, output),
-                            None => return Err(FillOutError::MissingKey(ident)),
-                        }
-                    }
+                ContentToken::Key(ident, _) => {
+                    output.push_str(
+                        content.get(TokenIdent::new(ident.as_ref(), Token::Key)) 
+                    );
+                    /*if let Some(default_box) = default_box {
+                        return fill_out_token(*default_box, content, output);
+                    }*/
                 },
                 ContentToken::Option(key_box) => {
-                    let (ident, default_box) = match *key_box {
+                    let (ident, _) = match &**key_box {
                         ContentToken::Key(ident, default_box) => (ident, default_box),
-                        _ => panic!("ContentToken::Option did not contain a ContentToken::Key instance. `parse::option` should not allow this!"),
+                        _ => panic!("ContentToken::Option did not contain a ContentToken::Key instance. \
+                            `parse::option` should not allow this!"),
                     };
-                    match content.get(TokenIdent::new(ident.as_ref(), Token::Option)) {
-                        Some(content) if !content.is_empty() => output.push_str(&content),
-                        Some(_) => return Err(FillOutError::EmptyContent(ident)),
-                        None => match default_box {
-                            Some(default_box) => return fill_out_token(*default_box, content, output),
-                            None => return Err(FillOutError::MissingOption(ident)),
-                        }
-                    }
+                    output.push_str(
+                        content.get(TokenIdent::new(ident.as_ref(), Token::Option))
+                    );
+                    /*if let Some(default_box) = default_box {
+                        return fill_out_token(*default_box, content, output);
+                    }*/
                 },
             }
             Ok(())
         }
     
-        for token in self.tokens.into_iter() {
+        for token in &self.tokens {
             fill_out_token(token, &content, &mut output)?;
         }
-
         Ok(output)
     }
 
-    // Return a half-empty `ContentMap` instance containing the identifiers and 
+    // Return a half-empty `RequiredContent` instance containing the identifiers and 
     // token-types of all the empty entries in the template
-    pub fn draft(&self) -> ContentMap {
-        let mut map = ContentMap::new();
+    // If there is a default value for a key or an option which is a text literal,
+    // then this literal will be entered into the content table draft under this
+    // key or option entry. If the user selects a value for this entry, the default 
+    // will be overwritten.
+    pub fn draft(&self) -> RequiredContent {
+        let mut map = RequiredContent::new();
 
-        // Insert the identifier and token-type of each encounterd token into the map
-        fn draft_token(token: &ContentToken, map: &mut ContentMap) {
-           match token {
-                ContentToken::Text(_) => return,  // `text` values are not representet as keys in the content map
+        // Recursively store default values
+        fn get_default(token: &ContentToken, map: &mut RequiredContent) -> String {
+            match token {
+                ContentToken::Text(text) => text.clone(),
                 ContentToken::Constant(ident) => {
                     map.insert(TokenIdent::new(ident.as_ref(), Token::Constant), "".to_owned());
+                    "".to_owned()
                 },
                 ContentToken::Key(ident, default_box) => {
-                    map.insert(TokenIdent::new(ident.as_ref(), Token::Key), "".to_owned());
-                    match default_box {
-                        Some(default_box) => draft_token(&*default_box, map),
-                        None => return,
-                    }
+                    let default = match default_box {
+                        Some(default_box) => get_default(&*default_box, map),
+                        None => "".to_owned(),
+                    };
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Key), default.clone());
+                    default  // Propagate the default literal up
                 },
                 ContentToken::Option(key_box) => {
                     let (ident, default_box) = match &**key_box {
                         ContentToken::Key(ident, default_box) => (ident, default_box),
-                        _ => panic!("ContentToken::Option did not contain a ContentToken::Key instance. `parse::option` should not allow this!"),
+                        _ => panic!("ContentToken::Option did not contain a ContentToken::Key \
+                            instance. `parse::option` should not allow this!"),
                     };
-                    map.insert(TokenIdent::new(ident.as_ref(), Token::Option), "".to_owned());
-                    match default_box {
-                        Some(default_box) => draft_token(&*default_box, map),
-                        None => return,
-                    }
-                    // TODO: Add tests for new functionallity and ensure this actually prevents the
-                    // use of unspecified option identifiers
+                    let default = match default_box {
+                        Some(default_box) => get_default(&*default_box, map),
+                        None => "".to_owned(),
+                    };
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Option), default.clone());
+                    default  // Propagate the default literal up
                 },
             }
         }
 
         for token in &self.tokens {
-            draft_token(token, &mut map);
+            match token {
+                ContentToken::Text(_) => continue,  // `text` values are not representet as keys in the content map
+                ContentToken::Constant(ident) => {
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Constant), "".to_owned());
+                },
+                ContentToken::Key(ident, default_box) => {
+                    let default = match default_box {
+                        Some(default_box) => get_default(&*default_box, &mut map),
+                        None => String::new(),
+                    };
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Key), default);
+                },
+                ContentToken::Option(key_box) => {
+                    let (ident, default_box) = match &**key_box {
+                        ContentToken::Key(ident, default_box) => (ident, default_box),
+                        _ => panic!("ContentToken::Option did not contain a ContentToken::Key \
+                            instance. `parse::option` should not allow this!"),
+                    };
+                    let default = match default_box {
+                        Some(default_box) => get_default(&*default_box, &mut map),
+                        None => String::new(),
+                    };
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Option), default);
+                },
+            }
         }
 
         map
@@ -202,8 +330,11 @@ impl ContentTokens {
 impl std::str::FromStr for ContentTokens {
     type Err = UserError;
     
+    // Attempt to parse the given string into a `ContentTokens` instance
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        crate::parse_str(s)
+        Lazy::force(&LOGGING);
+        let mut scanner = Scanner::new(s);
+        template(&mut scanner)
     }
 }
 
