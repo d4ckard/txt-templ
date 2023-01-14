@@ -1,4 +1,6 @@
 use crate::content::*;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug)]
 pub struct Template {
@@ -32,6 +34,7 @@ impl Template {
 }
 
 #[derive(thiserror::Error, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TemplateError {
     #[error("transparent")]
     UserError(#[from] UserError),
