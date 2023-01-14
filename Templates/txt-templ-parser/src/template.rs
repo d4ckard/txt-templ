@@ -1,4 +1,3 @@
-use crate::parse::UserError;
 use crate::content::*;
 
 #[derive(Debug)]

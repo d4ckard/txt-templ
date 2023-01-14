@@ -1,4 +1,4 @@
-use crate::parse::Terminals;
+use super::parse::Terminals;
 use log::{debug, trace};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};

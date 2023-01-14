@@ -1,4 +1,4 @@
-use crate::scan::{Scanner, ScanError, Action};
+use super::scan::{Scanner, ScanError, Action};
 use crate::content::{ContentTokens, ContentToken, Ident};
 use log::debug;
 use unic_locale::Locale;

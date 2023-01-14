@@ -1,7 +1,10 @@
+mod parse;
+mod scan;
+pub use parse::UserError;
+use scan::Scanner;
+
 use unic_locale::{Locale, locale};
-use crate::parse::{template, UserError};
-use crate::scan::Scanner;
-use crate::LOGGING;
+use crate::utils::LOGGING;
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 #[cfg(feature = "serde")]
@@ -334,7 +337,7 @@ impl std::str::FromStr for ContentTokens {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Lazy::force(&LOGGING);
         let mut scanner = Scanner::new(s);
-        template(&mut scanner)
+        parse::template(&mut scanner)
     }
 }
 
