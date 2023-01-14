@@ -1,4 +1,4 @@
-use txt_templ_parser::ContentTokens;
+use txt_templ_parser::content::ContentTokens;
 
 use std::io::{Read, self};
 use std::env;
