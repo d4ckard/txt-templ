@@ -51,7 +51,7 @@ before of the opening brace (`{`).
 ### Example
 An option might be used to select a greeting on the fly:
 
-`UserContentStat`:
+`UserContentState`:
 
 ```
 Options:
@@ -84,7 +84,7 @@ not be contained inside an identifier.
 Constants are very useful for any kind of text which almost never changes
 but is repeated very often (e.g. your name, email, phone number etc.):
 
-`UserContentStat`:
+`UserContentState`:
 
 ```
 Options: ...
