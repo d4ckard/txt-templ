@@ -16,7 +16,7 @@ When filling out a template, text literals are copied directly into the result.
 ### Example
 A valid text literal containing special characters and non-ASCII characters:
 
-```bash
+```
 Hello, my name is Jörg!
 ```
 
@@ -28,7 +28,7 @@ A valid key is made up of the key's name ([identifier](#Identifiers)) contained 
 
 A key could be used to insert any name into the same template:
 
-```bash
+```
 Hello, my name is {name}!
 ```
 
@@ -64,7 +64,7 @@ Options:
 ```
 Template:
 
-```bash
+```
 ${greeting}, my name is {name}!
 ```
 
@@ -86,7 +86,7 @@ but is repeated very often (e.g. your name, email, phone number etc.):
 
 `UserContentStat`:
 
-```bash
+```
 Options: ...
 
 Constants:
@@ -96,7 +96,7 @@ Constants:
 ```
 Template:
 
-```bash
+```
 ${greeting}, my name is $Me! I am here to tell you this {message}.
 ```
 

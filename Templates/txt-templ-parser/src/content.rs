@@ -16,10 +16,28 @@ pub struct UserContentState {
     pub options: HashMap<Ident, HashMap<Ident, String>>,
 }
 
+impl UserContentState {
+    pub fn new() -> Self {
+        Self {
+            constants: HashMap::new(),
+            options: HashMap::new(),
+        }
+    }
+}
+
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContent {
     pub keys: HashMap<Ident, String>,
     pub choices: HashMap<Ident, Ident>,
+}
+
+impl UserContent {
+    pub fn new() -> Self {
+        Self {
+            keys: HashMap::new(),
+            choices:  HashMap::new(),
+        }
+    }
 }
 
 // TODO: Add defaults field to `Content`

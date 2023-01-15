@@ -53,19 +53,13 @@ mod tests {
     fn template_api_works() {
         let input = "Hallo {name:A default literal}, ich bin $name.\n${SeeOff}";
         let user_content = {
-            let mut content = UserContent {
-                keys: HashMap::new(),
-                choices: HashMap::new(),
-            };
+            let mut content = UserContent::new();
             content.keys.insert(Ident::new("name"), "Leto".to_owned());
             content.choices.insert(Ident::new("SeeOff"), Ident::new("CU"));
             content
         };
         let user_content_state = {
-            let mut content  = UserContentState {
-                constants: HashMap::new(),
-                options: HashMap::new(),
-            };
+            let mut content = UserContentState::new();
             content.constants.insert(Ident::new("name"), "Paul".to_owned());
             let mut choices = HashMap::new();
             choices.insert(Ident::new("CU"), "See You".to_owned());
@@ -80,28 +74,21 @@ mod tests {
     mod correct {
         use super::*;
 
-        /*#[test]
-        fn fill_out_works() {
-            let variants = vec![
-                ("Hallo Paul", "Hallo {name}".parse::<ContentTokens>().unwrap(), vec![(TokenIdent::new("name", Token::Key), "Paul")]),
-                ("a Leto b Paul", "a {other} b $name".parse().unwrap(), vec![
-                    (TokenIdent::new("other", Token::Key), "Leto"),
-                    (TokenIdent::new("name", Token::Constant), "Paul"),
-                ]),
-                ("a Leto b Paul", "a {other:Leto} b $name".parse().unwrap(), vec![
-                    (TokenIdent::new("name", Token::Constant), "Paul")
-                ]),
-                ("a Leto b Paul", "a {other:{othername:Leto}} b $name".parse().unwrap(), vec![
-                    (TokenIdent::new("name", Token::Constant), "Paul")
-                ]),
-            ];
-                                         
-            for (expected, tokens, pairs) in variants {
-                let content = helper::content_map_from_vec(pairs);
-                let output = tokens.fill_out(content);
-                assert_eq!(&output.unwrap(), expected);
-            }
-        }*/
+        #[test]
+        fn constant_default_for_option() {
+            let input = "${email:$workemail}";
+            let user_content = UserContent::new();
+            let user_content_state = {
+                let mut content = UserContentState::new();
+                content.constants.insert(Ident::new("workemail"), "im@work.com".to_owned());
+                let mut choices = HashMap::new();
+                choices.insert(Ident::new("private"), "im@home.com".to_owned());
+                content.options.insert(Ident::new("email"), choices);
+                content
+            };
+            let output = Template::parse(input).unwrap().fill_out(user_content, user_content_state).unwrap();
+            assert_eq!(&output, "im@work.com");
+        }
 
         #[test]
         fn draft_works() {
