@@ -28,7 +28,7 @@ impl Template {
         required.add_options(user_content.choices, user_content_state.options);
         required.add_keys(user_content.keys);
 
-        let content: Content = required.try_into()?;
+        let content: FullContent = required.try_into()?;
         Ok(self.tokens.fill_out(content)?)
     }
 }
@@ -54,15 +54,15 @@ mod tests {
         let input = "Hallo {name:A default literal}, ich bin $name.\n${SeeOff}";
         let user_content = {
             let mut content = UserContent::new();
-            content.keys.insert(Ident::new("name"), "Leto".to_owned());
+            content.keys.insert(Ident::new("name"), Content::new("Leto"));
             content.choices.insert(Ident::new("SeeOff"), Ident::new("CU"));
             content
         };
         let user_content_state = {
             let mut content = UserContentState::new();
-            content.constants.insert(Ident::new("name"), "Paul".to_owned());
+            content.constants.insert(Ident::new("name"), Content::new("Paul"));
             let mut choices = HashMap::new();
-            choices.insert(Ident::new("CU"), "See You".to_owned());
+            choices.insert(Ident::new("CU"), Content::new("See You"));
             content.options.insert(Ident::new("SeeOff"), choices);
             content
         };
@@ -80,9 +80,9 @@ mod tests {
             let user_content = UserContent::new();
             let user_content_state = {
                 let mut content = UserContentState::new();
-                content.constants.insert(Ident::new("workemail"), "im@work.com".to_owned());
+                content.constants.insert(Ident::new("workemail"), Content::new("im@work.com"));
                 let mut choices = HashMap::new();
-                choices.insert(Ident::new("private"), "im@home.com".to_owned());
+                choices.insert(Ident::new("private"), Content::new("im@home.com"));
                 content.options.insert(Ident::new("email"), choices);
                 content
             };
@@ -193,7 +193,7 @@ mod tests {
         pub fn content_map_from_vec(v: Vec<(TokenIdent, &str)>) -> RequiredContent {
             let mut map = RequiredContent::new();
             for (ident, value) in v {
-                map.insert(ident, value.to_owned());
+                map.insert(ident, value);
             }
             map
         }

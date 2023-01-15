@@ -9,11 +9,12 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
+use log::debug;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContentState {
-    pub constants: HashMap<Ident, String>,
-    pub options: HashMap<Ident, HashMap<Ident, String>>,
+    pub constants: HashMap<Ident, Content>,
+    pub options: HashMap<Ident, HashMap<Ident, Content>>,
 }
 
 impl UserContentState {
@@ -27,7 +28,7 @@ impl UserContentState {
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContent {
-    pub keys: HashMap<Ident, String>,
+    pub keys: HashMap<Ident, Content>,
     pub choices: HashMap<Ident, Ident>,
 }
 
@@ -44,10 +45,10 @@ impl UserContent {
 
 // Type containing ALL required content to  fill out a template
 #[derive(Debug)]
-pub struct Content(HashMap<Token, HashMap<Ident, String>>);
+pub struct FullContent(HashMap<Token, HashMap<Ident, Content>>);
 
-impl Content {
-    pub fn get(&self, token: TokenIdent) -> &String {
+impl FullContent {
+    pub fn get(&self, token: TokenIdent) -> &Content {
         match self.0.get(&token.token) {
             Some(type_entries) => match type_entries.get(&token.ident) {
                 Some(entry) => entry,
@@ -65,7 +66,7 @@ impl Content {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RequiredContent(
     #[cfg_attr(feature = "serde", serde_as(as = "Vec<(_, _)>"))]
-    HashMap<Token, HashMap<Ident, String>>,
+    HashMap<Token, HashMap<Ident, Content>>,
 );
 
 impl RequiredContent {
@@ -73,18 +74,19 @@ impl RequiredContent {
         Self(HashMap::new())
     }
 
-    pub fn insert(&mut self, token: TokenIdent, content: String) {
+    pub fn insert(&mut self, token: TokenIdent, content: &str) {
+        let content = Content::new(content);
         match self.0.get_mut(&token.token) {
             Some(idents) => { idents.insert(token.ident, content); },
             None => {
-                let mut map: HashMap<Ident, String> = HashMap::new();
+                let mut map: HashMap<Ident, Content> = HashMap::new();
                 map.insert(token.ident, content);
                 self.0.insert(token.token, map);
             },
         };
     }
 
-    pub fn add_constants(&mut self, mut constants: HashMap<Ident, String>) {
+    pub fn add_constants(&mut self, mut constants: HashMap<Ident, Content>) {
         if let Some(entries) = self.0.get_mut(&Token::Constant) {
             // Move every piece of content for each required identifier into
             // the required constant entries.
@@ -96,7 +98,7 @@ impl RequiredContent {
         }
     }
 
-    pub fn add_options(&mut self, choices: HashMap<Ident, Ident>, mut options: HashMap<Ident, HashMap<Ident, String>>) {
+    pub fn add_options(&mut self, choices: HashMap<Ident, Ident>, mut options: HashMap<Ident, HashMap<Ident, Content>>) {
         if let Some(entries) = self.0.get_mut(&Token::Option) {
             // Move every chosen piece of content for each required identifier into the
             // required constant entries.
@@ -119,7 +121,7 @@ impl RequiredContent {
         }
     }
 
-    pub fn add_keys(&mut self, mut keys: HashMap<Ident, String>) {
+    pub fn add_keys(&mut self, mut keys: HashMap<Ident, Content>) {
         if let Some(entries) = self.0.get_mut(&Token::Key) {
             // Mov every piece of content for each required key
             // into the required key entries.
@@ -132,10 +134,11 @@ impl RequiredContent {
     }
 }
 
-impl TryInto<Content> for RequiredContent {
+impl TryInto<FullContent> for RequiredContent {
     type Error = FillOutError;
 
-    fn try_into(self) -> Result<Content, Self::Error> {
+    fn try_into(self) -> Result<FullContent, Self::Error> {
+        debug!("{:?}", &self);
         // Check that there are entires without content
         for (token_type, entries) in &self.0 {
             for (ident, content) in entries {
@@ -149,7 +152,7 @@ impl TryInto<Content> for RequiredContent {
             }
         }
         // Move all the entires into a new Content instance
-        Ok(Content( self.0 ))
+        Ok(FullContent( self.0 ))
     }
 }
 
@@ -233,22 +236,22 @@ impl ContentTokens {
 
     // Use the content map to substitue all values in `tokens` until
     // the entire template has been filled out.
-    pub fn fill_out(&self, content: Content) -> Result<String, FillOutError> {
+    pub fn fill_out(&self, content: FullContent) -> Result<String, FillOutError> {
         Lazy::force(&LOGGING);
 
         let mut output = String::new();
 
         // Try to add the content for `token` to `output`
-        fn fill_out_token(token: &ContentToken, content: &Content, output: &mut String) -> Result<(), FillOutError> {
+        fn fill_out_token(token: &ContentToken, content: &FullContent, output: &mut String) -> Result<(), FillOutError> {
             match token {
                 ContentToken::Text(text) => output.push_str(&text),
                 ContentToken::Constant(ident) => {
                     let content = content.get(TokenIdent::new(ident.as_ref(), Token::Constant));
-                    output.push_str(content);
+                    output.push_str(content.as_ref());
                 },
                 ContentToken::Key(ident, _) => {
                     output.push_str(
-                        content.get(TokenIdent::new(ident.as_ref(), Token::Key)) 
+                        content.get(TokenIdent::new(ident.as_ref(), Token::Key)).as_ref()
                     );
                     /*if let Some(default_box) = default_box {
                         return fill_out_token(*default_box, content, output);
@@ -261,7 +264,7 @@ impl ContentTokens {
                             `parse::option` should not allow this!"),
                     };
                     output.push_str(
-                        content.get(TokenIdent::new(ident.as_ref(), Token::Option))
+                        content.get(TokenIdent::new(ident.as_ref(), Token::Option)).as_ref()
                     );
                     /*if let Some(default_box) = default_box {
                         return fill_out_token(*default_box, content, output);
@@ -291,7 +294,7 @@ impl ContentTokens {
             match token {
                 ContentToken::Text(text) => text.clone(),
                 ContentToken::Constant(ident) => {
-                    map.insert(TokenIdent::new(ident.as_ref(), Token::Constant), "".to_owned());
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Constant), "");
                     "".to_owned()
                 },
                 ContentToken::Key(ident, default_box) => {
@@ -299,7 +302,7 @@ impl ContentTokens {
                         Some(default_box) => get_default(&*default_box, map),
                         None => "".to_owned(),
                     };
-                    map.insert(TokenIdent::new(ident.as_ref(), Token::Key), default.clone());
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Key), &default);
                     default  // Propagate the default literal up
                 },
                 ContentToken::Option(key_box) => {
@@ -312,7 +315,7 @@ impl ContentTokens {
                         Some(default_box) => get_default(&*default_box, map),
                         None => "".to_owned(),
                     };
-                    map.insert(TokenIdent::new(ident.as_ref(), Token::Option), default.clone());
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Option), &default);
                     default  // Propagate the default literal up
                 },
             }
@@ -322,14 +325,14 @@ impl ContentTokens {
             match token {
                 ContentToken::Text(_) => continue,  // `text` values are not representet as keys in the content map
                 ContentToken::Constant(ident) => {
-                    map.insert(TokenIdent::new(ident.as_ref(), Token::Constant), "".to_owned());
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Constant), "");
                 },
                 ContentToken::Key(ident, default_box) => {
                     let default = match default_box {
                         Some(default_box) => get_default(&*default_box, &mut map),
                         None => String::new(),
                     };
-                    map.insert(TokenIdent::new(ident.as_ref(), Token::Key), default);
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Key), &default);
                 },
                 ContentToken::Option(key_box) => {
                     let (ident, default_box) = match &**key_box {
@@ -341,7 +344,7 @@ impl ContentTokens {
                         Some(default_box) => get_default(&*default_box, &mut map),
                         None => String::new(),
                     };
-                    map.insert(TokenIdent::new(ident.as_ref(), Token::Option), default);
+                    map.insert(TokenIdent::new(ident.as_ref(), Token::Option), &default);
                 },
             }
         }
@@ -424,5 +427,37 @@ impl AsRef<str> for Ident {
 impl std::fmt::Display for Ident {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Content(String);
+
+impl Content {
+    pub fn new(s: &str) -> Self {
+        Self(s.to_owned())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl From<String> for Content {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for Content {
+    fn from(s: &str) -> Self {
+        Self(s.to_owned())
+    }
+}
+
+impl AsRef<str> for Content {
+    fn as_ref<'a>(&'a self) -> &'a str {
+        &self.0
     }
 }
