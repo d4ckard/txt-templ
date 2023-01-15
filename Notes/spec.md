@@ -2,10 +2,10 @@
 
 A template may contain for different types of elements:
 
-  1. [Text literals](#-Text-literals)
-  2. [Keys](#-Keys)
-  3. [Options](#-Options)
-  4. [Constants](#-Constants)
+  1. [Text literals](#-text-literals)
+  2. [Keys](#-keys)
+  3. [Options](#-options)
+  4. [Constants](#-constants)
 
 
 ## Text literals
