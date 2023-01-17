@@ -48,16 +48,16 @@ mod tests {
         let input = "Hallo {name:A default literal}, ich bin $name.\n${SeeOff}";
         let user_content = {
             let mut content = UserContent::new();
-            content.keys.insert(Ident::new("name"), Content::new("Leto"));
-            content.choices.insert(Ident::new("SeeOff"), Ident::new("CU"));
+            content.keys.insert(Ident::from("name"), Content::from("Leto"));
+            content.choices.insert(Ident::from("SeeOff"), Ident::from("CU"));
             content
         };
         let user_content_state = {
             let mut content = UserContentState::new();
-            content.constants.insert(Ident::new("name"), Content::new("Paul"));
+            content.constants.insert(Ident::from("name"), Content::from("Paul"));
             let mut choices = HashMap::new();
-            choices.insert(Ident::new("CU"), Content::new("See You"));
-            content.options.insert(Ident::new("SeeOff"), choices);
+            choices.insert(Ident::from("CU"), Content::from("See You"));
+            content.options.insert(Ident::from("SeeOff"), choices);
             content
         };
 
@@ -74,10 +74,10 @@ mod tests {
             let user_content = UserContent::new();
             let user_content_state = {
                 let mut content = UserContentState::new();
-                content.constants.insert(Ident::new("workemail"), Content::new("im@work.com"));
+                content.constants.insert(Ident::from("workemail"), Content::from("im@work.com"));
                 let mut choices = HashMap::new();
-                choices.insert(Ident::new("private"), Content::new("im@home.com"));
-                content.options.insert(Ident::new("email"), choices);
+                choices.insert(Ident::from("private"), Content::from("im@home.com"));
+                content.options.insert(Ident::from("email"), choices);
                 content
             };
             let output = Template::parse(input).unwrap().fill_out(user_content, user_content_state).unwrap();
@@ -124,35 +124,35 @@ mod tests {
         // Other tests assert that any idents/text passes
         let pairs = vec![
             ("fr-FR\n{key}$Constant${Option}", vec![
-                ContentToken::Key(Ident::new("key"), None),
-                ContentToken::Constant(Ident::new("Constant")),
-                ContentToken::Option(Box::new(ContentToken::Key(Ident::new("Option"), None))),
+                ContentToken::Key(Ident::from("key"), None),
+                ContentToken::Constant(Ident::from("Constant")),
+                ContentToken::Option(Box::new(ContentToken::Key(Ident::from("Option"), None))),
             ], Some("fr-FR")),
             ("S ${Anrede} {name}\n{n}\n$M\n$S", vec![
                 ContentToken::Text("S ".into()),
-                ContentToken::Option(Box::new(ContentToken::Key(Ident::new("Anrede"), None))),
+                ContentToken::Option(Box::new(ContentToken::Key(Ident::from("Anrede"), None))),
                 ContentToken::Text(" ".into()),
-                ContentToken::Key(Ident::new("name"), None),
+                ContentToken::Key(Ident::from("name"), None),
                 ContentToken::Text("\n".into()),
-                ContentToken::Key(Ident::new("n"), None),
+                ContentToken::Key(Ident::from("n"), None),
                 ContentToken::Text("\n".into()),
-                ContentToken::Constant(Ident::new("M")),
+                ContentToken::Constant(Ident::from("M")),
                 ContentToken::Text("\n".into()),
-                ContentToken::Constant(Ident::new("S")),
+                ContentToken::Constant(Ident::from("S")),
             ], None),
             ("Sehr geehrte Frau {name}\n{nachricht}\nMit freundlichen Grüßen\nBar", vec![
                 ContentToken::Text("Sehr geehrte Frau ".into()),
-                ContentToken::Key(Ident::new("name"), None),
+                ContentToken::Key(Ident::from("name"), None),
                 ContentToken::Text("\n".into()),
-                ContentToken::Key(Ident::new("nachricht"), None),
+                ContentToken::Key(Ident::from("nachricht"), None),
                 ContentToken::Text("\nMit freundlichen Grüßen\nBar".into()),
             ], None),
             ("{name:Peter} bla ${bye:{mfg:MfG}}", vec![
-                ContentToken::Key(Ident::new("name"), Some(Box::new(ContentToken::Text("Peter".into())))),
+                ContentToken::Key(Ident::from("name"), Some(Box::new(ContentToken::Text("Peter".into())))),
                 ContentToken::Text(" bla ".into()),
                 ContentToken::Option(Box::new(
-                    ContentToken::Key(Ident::new("bye"), Some(Box::new(
-                        ContentToken::Key(Ident::new("mfg"), Some(Box::new(
+                    ContentToken::Key(Ident::from("bye"), Some(Box::new(
+                        ContentToken::Key(Ident::from("mfg"), Some(Box::new(
                             ContentToken::Text("MfG".into())   
                         )))   
                     )))

@@ -10,10 +10,18 @@ use std::collections::HashMap;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 
+/// Map identifiers to content
+type IdentMap<C> = HashMap<Ident, C>;
+// Map content type co map of content
+type TypeMap<T> = HashMap<ContentType, T>;
+
+pub type Ident = String;
+pub type Content = String;
+
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContentState {
-    pub constants: HashMap<Ident, Content>,
-    pub options: HashMap<Ident, HashMap<Ident, Content>>,
+    pub constants: IdentMap<Content>,
+    pub options: IdentMap<IdentMap<Content>>,
 }
 
 impl UserContentState {
@@ -27,8 +35,8 @@ impl UserContentState {
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContent {
-    pub keys: HashMap<Ident, Content>,
-    pub choices: HashMap<Ident, Ident>,
+    pub keys: IdentMap<Content>,
+    pub choices: IdentMap<Ident>,
 }
 
 impl UserContent {
@@ -40,9 +48,10 @@ impl UserContent {
     }
 }
 
+
 // Type containing ALL required content to  fill out a template
 #[derive(Debug)]
-pub struct FullContent(HashMap<ContentType, HashMap<Ident, Content>>);
+pub struct FullContent(TypeMap<IdentMap<Content>>);
 
 impl FullContent {
     pub fn get(&self, idx: ContentIndex) -> &Content {
@@ -72,7 +81,7 @@ pub enum ReqContent {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RequiredContent(
     #[cfg_attr(feature = "serde", serde_as(as = "Vec<(_, _)>"))]
-    HashMap<ContentType, HashMap<Ident, ReqContent>>,
+    TypeMap<IdentMap<ReqContent>>,
 );
 
 impl RequiredContent {
@@ -93,36 +102,34 @@ impl RequiredContent {
         };
     }
 
-    // TODO: Create types for reused *types*
-
-    pub fn add_constants(&mut self, mut constants: HashMap<Ident, Content>) {
+    pub fn add_constants(&mut self, mut constants: IdentMap<Content>) {
         if let Some(entries) = self.0.get_mut(&ContentType::Constant) {
             // Move every piece of content for each required identifier into
             // the required constant entries.
             for (ident, value) in entries {
-                if let Some(constant) = constants.remove(&ident) {
+                if let Some(constant) = constants.remove(ident) {
                     *value = ReqContent::Literal(constant);
                 }
             }
         }
     }
 
-    pub fn add_options(&mut self, choices: HashMap<Ident, Ident>, mut options: HashMap<Ident, HashMap<Ident, Content>>) {
+    pub fn add_options(&mut self, choices: IdentMap<Ident>, mut options: IdentMap<IdentMap<Content>>) {
         if let Some(entries) = self.0.get_mut(&ContentType::Option) {
             // Move every chosen piece of content for each required identifier into the
             // required constant entries.
             for (ident, value) in entries {
                 // Get the option for the current identifier
-                let option = match options.get_mut(&ident) {
+                let option = match options.get_mut(ident) {
                     Some(option) => option,
                     None => continue,
                 };
                 // Get the choosen option
-                if let Some(choice) = choices.get(&ident) {
+                if let Some(choice) = choices.get(ident) {
                     // The the content assoicates with the choice and move
                     // it into the required optin entries under the identifier
                     // for the option itself
-                    if let Some(content) = option.remove(&choice) {
+                    if let Some(content) = option.remove(choice) {
                         *value = ReqContent::Literal(content);
                     }
                 }
@@ -130,12 +137,12 @@ impl RequiredContent {
         }
     }
 
-    pub fn add_keys(&mut self, mut keys: HashMap<Ident, Content>) {
+    pub fn add_keys(&mut self, mut keys: IdentMap<Content>) {
         if let Some(entries) = self.0.get_mut(&ContentType::Key) {
             // Mov every piece of content for each required key
             // into the required key entries.
             for (ident, value) in entries {
-                if let Some(key) = keys.remove(&ident) {
+                if let Some(key) = keys.remove(ident) {
                     *value = ReqContent::Literal(key);
                 }
             }
@@ -152,7 +159,7 @@ impl TryInto<FullContent> for RequiredContent {
         fn validate_content(
             idx: ContentIndex,  // ContentIndex of current element; always passing this is kinda a waste
             content: &ReqContent,
-            map: &HashMap<ContentType, HashMap<Ident, ReqContent>>,
+            map: &TypeMap<IdentMap<ReqContent>>,
         ) -> Result<Content, FillOutError> {
             match content {
                 ReqContent::None => {
@@ -204,7 +211,7 @@ pub struct ContentIndex(ContentType, Ident);
 
 impl ContentIndex {
     pub fn new(ident: &str, content_type: ContentType) -> Self {
-        Self(content_type, Ident::new(ident))
+        Self(content_type, Ident::from(ident))
     }
 }
 
@@ -333,7 +340,7 @@ impl ContentTokens {
 
         fn draft_token(token: &ContentToken, map: &mut RequiredContent) -> ReqContent {
             match token {
-                ContentToken::Text(text) => ReqContent::Literal(Content::new(text)),
+                ContentToken::Text(text) => ReqContent::Literal(Content::from(text)),
                 ContentToken::Constant(ident) => {
                     let token_idx = ContentIndex::new(ident.as_ref(), ContentType::Constant);
                     map.insert(&token_idx, ReqContent::None);
@@ -403,83 +410,10 @@ pub enum FillOutError {
     MissingDefault(ContentIndex),
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Idents(Vec<Ident>);
-
-impl std::fmt::Display for Idents {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        for ident in self.0.iter() {
-            write!(f, "{}", ident)?;
-        }
-        Ok(())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum ContentToken {
     Text(String),
     Key(Ident, Option<Box::<ContentToken>>),
     Constant(Ident),
     Option(Box::<ContentToken>),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Ident(String);
-
-impl Ident {
-    pub fn new(s: &str) -> Self {
-        Self(s.to_owned())
-    }
-}
-
-impl From<String> for Ident {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
-impl AsRef<str> for Ident {
-    fn as_ref<'a>(&'a self) -> &'a str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for Ident {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Content(String);
-
-impl Content {
-    pub fn new(s: &str) -> Self {
-        Content(s.to_owned())
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-}
-
-impl From<String> for Content {
-    fn from(s: String) -> Self {
-        Content(s)
-    }
-}
-
-impl From<&str> for Content {
-    fn from(s: &str) -> Self {
-        Self::new(s)
-    }
-}
-
-impl AsRef<str> for Content {
-    fn as_ref<'a>(&'a self) -> &'a str {
-        &self.0
-    }
 }
