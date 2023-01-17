@@ -94,12 +94,12 @@ mod tests {
         fn draft_works() {
             let variants = vec![
                 ("a {name} b $Bye".parse::<ContentTokens>().unwrap(), vec![
-                    (TokenIdent::new("name", Token::Key), ""),
-                    (TokenIdent::new("Bye", Token::Constant), ""),
+                    (TokenIdent::new("name", Token::Key), ReqContent::None),
+                    (TokenIdent::new("Bye", Token::Constant), ReqContent::None),
                 ]),
                 ("{other:{othername:Leto}}".parse::<ContentTokens>().unwrap(), vec![
-                    (TokenIdent::new("other", Token::Key), "Leto"),
-                    (TokenIdent::new("othername", Token::Key), "Leto"),
+                    (TokenIdent::new("other", Token::Key), ReqContent::Default(TokenIdent::new("othername", Token::Key))),
+                    (TokenIdent::new("othername", Token::Key), ReqContent::Literal("Leto".into())),
                 ]),
             ];
             for (tokens, pairs) in variants {
@@ -190,10 +190,10 @@ mod tests {
     mod helper {
         use super::*;
 
-        pub fn content_map_from_vec(v: Vec<(TokenIdent, &str)>) -> RequiredContent {
+        pub fn content_map_from_vec(v: Vec<(TokenIdent, ReqContent)>) -> RequiredContent {
             let mut map = RequiredContent::new();
             for (ident, value) in v {
-                map.insert(ident, value);
+                map.insert(&ident, value);
             }
             map
         }

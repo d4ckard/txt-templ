@@ -154,8 +154,6 @@ explicitly specify another email address:
 ${email:$workemail}
 ```
 
-**Disclaimer:** Defaults are not yet implemented for options!
-
 
 [^1]: More specifically text literals may contain any valid [unicode scalar value](https://www.unicode.org/glossary/#unicode_scalar_value) as text literals are represented as lists of [rust chars](https://doc.rust-lang.org/std/primitive.char.html) internally.
 
