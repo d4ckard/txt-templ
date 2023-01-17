@@ -3,18 +3,12 @@ use crate::content::*;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug)]
-pub struct Template {
-    source: String,
-    tokens: ContentTokens,
-}
+pub struct Template(ContentTokens);
 
 impl Template {
     // Create a new `Template` instance by parsing the input string
     pub fn parse(s: &str) -> Result<Self, TemplateError> {
-        Ok(Self {
-            source: s.to_owned(),
-            tokens: s.parse()?,
-        })
+        Ok(Self(s.parse()?))
     }
     
     // Fill out the template
@@ -23,13 +17,13 @@ impl Template {
         user_content: UserContent,
         user_content_state: UserContentState
     ) -> Result<String, TemplateError> {
-        let mut required = self.tokens.draft();
+        let mut required = self.0.draft();
         required.add_constants(user_content_state.constants);
         required.add_options(user_content.choices, user_content_state.options);
         required.add_keys(user_content.keys);
 
         let content: FullContent = required.try_into()?;
-        Ok(self.tokens.fill_out(content)?)
+        Ok(self.0.fill_out(content)?)
     }
 }
 
@@ -94,12 +88,12 @@ mod tests {
         fn draft_works() {
             let variants = vec![
                 ("a {name} b $Bye".parse::<ContentTokens>().unwrap(), vec![
-                    (TokenIdent::new("name", Token::Key), ReqContent::None),
-                    (TokenIdent::new("Bye", Token::Constant), ReqContent::None),
+                    (ContentIndex::new("name", ContentType::Key), ReqContent::None),
+                    (ContentIndex::new("Bye", ContentType::Constant), ReqContent::None),
                 ]),
                 ("{other:{othername:Leto}}".parse::<ContentTokens>().unwrap(), vec![
-                    (TokenIdent::new("other", Token::Key), ReqContent::Default(TokenIdent::new("othername", Token::Key))),
-                    (TokenIdent::new("othername", Token::Key), ReqContent::Literal("Leto".into())),
+                    (ContentIndex::new("other", ContentType::Key), ReqContent::Default(ContentIndex::new("othername", ContentType::Key))),
+                    (ContentIndex::new("othername", ContentType::Key), ReqContent::Literal("Leto".into())),
                 ]),
             ];
             for (tokens, pairs) in variants {
@@ -190,10 +184,10 @@ mod tests {
     mod helper {
         use super::*;
 
-        pub fn content_map_from_vec(v: Vec<(TokenIdent, ReqContent)>) -> RequiredContent {
+        pub fn content_map_from_vec(v: Vec<(ContentIndex, ReqContent)>) -> RequiredContent {
             let mut map = RequiredContent::new();
-            for (ident, value) in v {
-                map.insert(&ident, value);
+            for (idx, value) in v {
+                map.insert(&idx, value);
             }
             map
         }

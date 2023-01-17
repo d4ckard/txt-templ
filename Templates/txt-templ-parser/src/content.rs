@@ -9,7 +9,6 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
-use log::debug;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContentState {
@@ -41,20 +40,18 @@ impl UserContent {
     }
 }
 
-// TODO: Add defaults field to `Content`
-
 // Type containing ALL required content to  fill out a template
 #[derive(Debug)]
-pub struct FullContent(HashMap<Token, HashMap<Ident, Content>>);
+pub struct FullContent(HashMap<ContentType, HashMap<Ident, Content>>);
 
 impl FullContent {
-    pub fn get(&self, token: TokenIdent) -> &Content {
-        match self.0.get(&token.token) {
-            Some(type_entries) => match type_entries.get(&token.ident) {
+    pub fn get(&self, idx: ContentIndex) -> &Content {
+        match self.0.get(&idx.0) {
+            Some(type_entries) => match type_entries.get(&idx.1) {
                 Some(entry) => entry,
-                None => panic!("Content was missing a requested entry {:?}", token),
+                None => panic!("Content was missing a requested entry {:?}", idx),
             },
-            None => panic!("Content was missing a requrest entry type {:?}", token),
+            None => panic!("Content was missing a requrest entry type {:?}", idx),
         }
     }
 }
@@ -64,8 +61,7 @@ impl FullContent {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ReqContent {
     Literal(Content),  //  Either a piece of content
-    Default(TokenIdent),  // Or a reference to another piece of content
-    // TODO: Rename TokenIdent to ContentIdx
+    Default(ContentIndex),  // Or a reference to another piece of content
     None,
 }
 
@@ -76,7 +72,7 @@ pub enum ReqContent {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RequiredContent(
     #[cfg_attr(feature = "serde", serde_as(as = "Vec<(_, _)>"))]
-    HashMap<Token, HashMap<Ident, ReqContent>>,
+    HashMap<ContentType, HashMap<Ident, ReqContent>>,
 );
 
 impl RequiredContent {
@@ -84,30 +80,23 @@ impl RequiredContent {
         Self(HashMap::new())
     }
 
-    pub fn insert(&mut self, token: &TokenIdent, content: ReqContent) {
-        match self.0.get_mut(&token.token) {
+    pub fn insert(&mut self, idx: &ContentIndex, content: ReqContent) {
+        match self.0.get_mut(&idx.0) {
             Some(idents) => {
-                idents.insert(token.ident.clone(), content);
+                idents.insert(idx.1.clone(), content);
             },
             None => {
                 let mut map: HashMap<Ident, ReqContent> = HashMap::new();
-                map.insert(token.ident.clone(), content);
-                self.0.insert(token.token, map);
+                map.insert(idx.1.clone(), content);
+                self.0.insert(idx.0, map);
             },
         };
     }
 
     // TODO: Create types for reused *types*
 
-    fn get(&self, token_ident: &TokenIdent) -> Option<&ReqContent> {
-        match self.0.get(&token_ident.token) {
-            Some(idents) => idents.get(&token_ident.ident),
-            None => None,
-        }
-    }
-
     pub fn add_constants(&mut self, mut constants: HashMap<Ident, Content>) {
-        if let Some(entries) = self.0.get_mut(&Token::Constant) {
+        if let Some(entries) = self.0.get_mut(&ContentType::Constant) {
             // Move every piece of content for each required identifier into
             // the required constant entries.
             for (ident, value) in entries {
@@ -119,7 +108,7 @@ impl RequiredContent {
     }
 
     pub fn add_options(&mut self, choices: HashMap<Ident, Ident>, mut options: HashMap<Ident, HashMap<Ident, Content>>) {
-        if let Some(entries) = self.0.get_mut(&Token::Option) {
+        if let Some(entries) = self.0.get_mut(&ContentType::Option) {
             // Move every chosen piece of content for each required identifier into the
             // required constant entries.
             for (ident, value) in entries {
@@ -142,7 +131,7 @@ impl RequiredContent {
     }
 
     pub fn add_keys(&mut self, mut keys: HashMap<Ident, Content>) {
-        if let Some(entries) = self.0.get_mut(&Token::Key) {
+        if let Some(entries) = self.0.get_mut(&ContentType::Key) {
             // Mov every piece of content for each required key
             // into the required key entries.
             for (ident, value) in entries {
@@ -161,32 +150,32 @@ impl TryInto<FullContent> for RequiredContent {
     // Also maybe make `validate_content` an associated function of `Content`
     fn try_into(self) -> Result<FullContent, Self::Error> {
         fn validate_content(
-            token_ident: TokenIdent,  // TokenIdent of current element; always passing this is kinda a waste
+            idx: ContentIndex,  // ContentIndex of current element; always passing this is kinda a waste
             content: &ReqContent,
-            map: &HashMap<Token, HashMap<Ident, ReqContent>>,
+            map: &HashMap<ContentType, HashMap<Ident, ReqContent>>,
         ) -> Result<Content, FillOutError> {
             match content {
                 ReqContent::None => {
-                    return Err(FillOutError::MissingElement(token_ident));
+                    return Err(FillOutError::MissingElement(idx));
                 }
                 ReqContent::Literal(its_lit) => {
                     let its_lit = its_lit.clone();
                     if its_lit.is_empty() {
-                        return Err(FillOutError::EmptyContent(token_ident));
+                        return Err(FillOutError::EmptyContent(idx));
                     } else {
                         return Ok(its_lit);  // <- only ok path is literal content
                     }
                 },
-                ReqContent::Default(default_id) => {
-                    let default_id = TokenIdent::new(default_id.ident.as_ref(), default_id.token);
-                    let content_opt = match map.get(&default_id.token) {
-                        Some(entries) => entries.get(&default_id.ident),
-                        None => return Err(FillOutError::MissingDefaultType(default_id)),
+                ReqContent::Default(default_idx) => {
+                    let default_idx = ContentIndex::new(default_idx.1.as_ref(), default_idx.0);
+                    let content_opt = match map.get(&default_idx.0) {
+                        Some(entries) => entries.get(&default_idx.1),
+                        None => return Err(FillOutError::MissingDefaultType(default_idx)),
                     };
 
                     match content_opt {
-                        Some(content) => return validate_content(default_id, &content, map),
-                        None => return Err(FillOutError::MissingDefault(default_id)),
+                        Some(content) => return validate_content(default_idx, &content, map),
+                        None => return Err(FillOutError::MissingDefault(default_idx)),
                     }
                 },
             }
@@ -197,7 +186,7 @@ impl TryInto<FullContent> for RequiredContent {
         for (token_type, entries) in &self.0 {
             let mut full_type = HashMap::new();
             for (ident, content) in entries {
-                match validate_content(TokenIdent::new(ident.as_ref(), *token_type), content, &self.0) {
+                match validate_content(ContentIndex::new(ident.as_ref(), *token_type), content, &self.0) {
                     Ok(content) => full_type.insert(ident.clone(), content),
                     Err(e) => return Err(e),
                 };
@@ -211,40 +200,34 @@ impl TryInto<FullContent> for RequiredContent {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct TokenIdent {
-    pub ident: Ident,
-    pub token: Token,
-}
+pub struct ContentIndex(ContentType, Ident);
 
-impl TokenIdent {
-    pub fn new(ident: &str, token: Token) -> Self {
-        Self {
-            ident: Ident::new(ident),
-            token
-        }
+impl ContentIndex {
+    pub fn new(ident: &str, content_type: ContentType) -> Self {
+        Self(content_type, Ident::new(ident))
     }
 }
 
-impl std::fmt::Display for TokenIdent {
+impl std::fmt::Display for ContentIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Ident: {}, Token type: {}", self.ident, self.token)
+        write!(f, "Type: {}, Ident: {}", self.0, self.1)
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Token {
+pub enum ContentType {
     Key,
     Constant,
     Option,
 }
 
-impl std::fmt::Display for Token {
+impl std::fmt::Display for ContentType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Token::Key => write!(f, "Key"),
-            Token::Constant => write!(f, "Constant"),
-            Token::Option => write!(f, "Option"),
+            ContentType::Key => write!(f, "Key"),
+            ContentType::Constant => write!(f, "Constant"),
+            ContentType::Option => write!(f, "Option"),
         }
     }
 }
@@ -305,12 +288,12 @@ impl ContentTokens {
             match token {
                 ContentToken::Text(text) => output.push_str(&text),
                 ContentToken::Constant(ident) => {
-                    let content = content.get(TokenIdent::new(ident.as_ref(), Token::Constant));
+                    let content = content.get(ContentIndex::new(ident.as_ref(), ContentType::Constant));
                     output.push_str(content.as_ref());
                 },
                 ContentToken::Key(ident, _) => {
                     output.push_str(
-                        content.get(TokenIdent::new(ident.as_ref(), Token::Key)).as_ref()
+                        content.get(ContentIndex::new(ident.as_ref(), ContentType::Key)).as_ref()
                     );
                     /*if let Some(default_box) = default_box {
                         return fill_out_token(*default_box, content, output);
@@ -323,7 +306,7 @@ impl ContentTokens {
                             `parse::option` should not allow this!"),
                     };
                     output.push_str(
-                        content.get(TokenIdent::new(ident.as_ref(), Token::Option)).as_ref()
+                        content.get(ContentIndex::new(ident.as_ref(), ContentType::Option)).as_ref()
                     );
                     /*if let Some(default_box) = default_box {
                         return fill_out_token(*default_box, content, output);
@@ -352,20 +335,20 @@ impl ContentTokens {
             match token {
                 ContentToken::Text(text) => ReqContent::Literal(Content::new(text)),
                 ContentToken::Constant(ident) => {
-                    let token_id = TokenIdent::new(ident.as_ref(), Token::Constant);
-                    map.insert(&token_id, ReqContent::None);
-                    ReqContent::Default(token_id)
+                    let token_idx = ContentIndex::new(ident.as_ref(), ContentType::Constant);
+                    map.insert(&token_idx, ReqContent::None);
+                    ReqContent::Default(token_idx)
                 },
                 ContentToken::Key(ident, default) => {
-                    let token_id = TokenIdent::new(ident.as_ref(), Token::Key);
+                    let token_idx = ContentIndex::new(ident.as_ref(), ContentType::Key);
                     match default {
                         Some(default_box) => {
                             let default = draft_token(&**default_box, map);
-                            map.insert(&token_id, default);
+                            map.insert(&token_idx, default);
                         },
-                        None => map.insert(&token_id, ReqContent::None),
+                        None => map.insert(&token_idx, ReqContent::None),
                     }
-                    ReqContent::Default(token_id)
+                    ReqContent::Default(token_idx)
                 },
                 ContentToken::Option(key_box) => {
                     // Extract the key box from the option
@@ -375,15 +358,15 @@ impl ContentTokens {
                             instance. `parse::option` should not allow this!"),
                     };
 
-                    let token_id = TokenIdent::new(ident.as_ref(), Token::Option);
+                    let token_idx = ContentIndex::new(ident.as_ref(), ContentType::Option);
                     match default {
                         Some(default_box) => {
                             let default = draft_token(&**default_box, map);
-                            map.insert(&token_id, default);
+                            map.insert(&token_idx, default);
                         },
-                        None => map.insert(&token_id, ReqContent::None),
+                        None => map.insert(&token_idx, ReqContent::None),
                     }
-                    ReqContent::Default(token_id)
+                    ReqContent::Default(token_idx)
                 },
             }
         }
@@ -411,13 +394,13 @@ impl std::str::FromStr for ContentTokens {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FillOutError {
     #[error("The given content is missing an element {0}")]
-    MissingElement(TokenIdent),
+    MissingElement(ContentIndex),
     #[error("The given content for the entry {0} is empty")]
-    EmptyContent(TokenIdent),
+    EmptyContent(ContentIndex),
     #[error("The type of a requested default {0} does not exist")]
-    MissingDefaultType(TokenIdent),
+    MissingDefaultType(ContentIndex),
     #[error("The identifier of a requested default {0} does not exitst")]
-    MissingDefault(TokenIdent),
+    MissingDefault(ContentIndex),
 }
 
 #[derive(Debug)]
@@ -495,7 +478,6 @@ impl From<&str> for Content {
     }
 }
 
-// TODO: Remove the default  from as ref
 impl AsRef<str> for Content {
     fn as_ref<'a>(&'a self) -> &'a str {
         &self.0
