@@ -1,6 +1,6 @@
 # Template spec
 
-A template may contain for different types of elements:
+A template may contain four different types of elements:
 
   1. [Text literals](#text-literals)
   2. [Keys](#keys)
@@ -24,7 +24,7 @@ Hello, my name is Jörg!
 Keys are named variables placed at any position in the template. When filling out the template,
 a text literal needs to be specified by the user for each key. This text literal is then
 substituted at the key's position in the template.
-A valid key is made up of the key's name ([identifier](#Identifiers)) contained inside curly braces (`{` and `}`).
+A valid key is made up of the key's name ([identifier](#identifiers)) contained inside curly braces (`{` and `}`).
 
 A key could be used to insert any name into the same template:
 
@@ -118,7 +118,7 @@ they are allowed to contain: identifiers may contain the ASCII symbols A-Z, a-z 
 
 `0275` (only digits)
 
-### Example of invalid identifiers
+### Examples of invalid identifiers
 `my-name` (contains forbidden special character)
 
 `Straße` (contains forbidden unicode character)

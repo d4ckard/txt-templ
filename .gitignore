@@ -3,3 +3,4 @@
 *.o
 *.swp
 **/node_modules
+*.html
