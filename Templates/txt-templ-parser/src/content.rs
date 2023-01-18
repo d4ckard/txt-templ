@@ -15,7 +15,7 @@ type IdentMap<C> = HashMap<Ident, C>;
 // Map content type co map of content
 type TypeMap<T> = HashMap<ContentType, T>;
 
-pub type Ident = String;
+pub type Ident = String;  // TODO: Introduce validity checking to `Ident`
 pub type Content = String;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -27,8 +27,29 @@ pub struct UserContentState {
 impl UserContentState {
     pub fn new() -> Self {
         Self {
-            constants: HashMap::new(),
-            options: HashMap::new(),
+            constants: IdentMap::new(),
+            options: IdentMap::new(),
+        }
+    }
+    pub fn map_constant(&mut self, ident: &str, content: &str) {
+        self.constants.insert(Ident::from(ident), Content::from(content));
+    }
+
+    /// Use this  method in combination with `new_choice`: `map_option("opt-name", new_choice("choice", "content"))`
+    pub fn map_option(
+        &mut self,
+        option: &str, 
+        choice: (Ident, Content)
+    ) {
+        let option = Ident::from(option);
+        let (ident, content) = choice;
+        match self.options.get_mut(&option) {
+            Some(choices) => { choices.insert(ident, content); },
+            None => {
+                let mut choices = IdentMap::new();
+                choices.insert(ident, content);
+                self.options.insert(option, choices);
+            },
         }
     }
 }
@@ -42,12 +63,23 @@ pub struct UserContent {
 impl UserContent {
     pub fn new() -> Self {
         Self {
-            keys: HashMap::new(),
-            choices:  HashMap::new(),
+            keys: IdentMap::new(),
+            choices: IdentMap::new(),
         }
+    }
+
+    pub fn map_key(&mut self, ident: &str, content: &str) {
+        self.keys.insert(Ident::from(ident), Content::from(content));
+    }
+
+    pub fn map_choice(&mut self, option: &str, choice: &str) {
+        self.choices.insert(Ident::from(option), Ident::from(choice));
     }
 }
 
+pub fn new_choice(ident: &str, content: &str) -> (Ident, Content) {
+    (Ident::from(ident), Content::from(content))
+}
 
 // Type containing ALL required content to  fill out a template
 #[derive(Debug)]

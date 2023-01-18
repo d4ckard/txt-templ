@@ -40,27 +40,25 @@ pub enum TemplateError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn template_api_works() {
         let input = "Hallo {name:A default literal}, ich bin $name.\n${SeeOff}";
         let user_content = {
-            let mut content = UserContent::new();
-            content.keys.insert(Ident::from("name"), Content::from("Leto"));
-            content.choices.insert(Ident::from("SeeOff"), Ident::from("CU"));
-            content
+            let mut c = UserContent::new();
+            c.map_key("name", "Leto");
+            c.map_choice("SeeOff", "CU");
+            c
         };
         let user_content_state = {
-            let mut content = UserContentState::new();
-            content.constants.insert(Ident::from("name"), Content::from("Paul"));
-            let mut choices = HashMap::new();
-            choices.insert(Ident::from("CU"), Content::from("See You"));
-            content.options.insert(Ident::from("SeeOff"), choices);
-            content
+            let mut c = UserContentState::new();
+            c.map_constant("name", "Paul");
+            c.map_option("SeeOff", new_choice("CU", "See You"));
+            c            
         };
 
-        let output = Template::parse(input).unwrap().fill_out(user_content, user_content_state).unwrap();
+        let output = Template::parse(input).unwrap()
+            .fill_out(user_content, user_content_state).unwrap();
         assert_eq!(&output, "Hallo Leto, ich bin Paul.\nSee You");
     }
 
@@ -68,25 +66,26 @@ mod tests {
     fn recursive_template_is_processed_correctly() {
         let input = "a {name:{another:default literal}}";
         let expected = "a default literal";
-        let user_content =  UserContent{keys: HashMap::new(), choices: HashMap::new()};
-        let user_content_state =  UserContentState{constants: HashMap::new(), options: HashMap::new()};
-        let output = Template::parse(input).unwrap().fill_out(user_content, user_content_state).unwrap();
+
+        let output = Template::parse(input).unwrap()
+            .fill_out(UserContent::new(), UserContentState::new()).unwrap();
         assert_eq!(&output, expected);
     }
 
     #[test]
     fn constant_default_for_option() {
         let input = "${email:$workemail}";
+
         let user_content = UserContent::new();
         let user_content_state = {
-            let mut content = UserContentState::new();
-            content.constants.insert(Ident::from("workemail"), Content::from("im@work.com"));
-            let mut choices = HashMap::new();
-            choices.insert(Ident::from("private"), Content::from("im@home.com"));
-            content.options.insert(Ident::from("email"), choices);
-            content
+            let mut c = UserContentState::new();
+            c.map_constant("workemail", "im@work.com");
+            c.map_option("email", new_choice("private", "im@home.com"));
+            c
         };
-        let output = Template::parse(input).unwrap().fill_out(user_content, user_content_state).unwrap();
+
+        let output = Template::parse(input).unwrap()
+            .fill_out(user_content, user_content_state).unwrap();
         assert_eq!(&output, "im@work.com");
     }
 
