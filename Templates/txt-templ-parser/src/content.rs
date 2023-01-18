@@ -15,8 +15,12 @@ type IdentMap<C> = HashMap<Ident, C>;
 // Map content type co map of content
 type TypeMap<T> = HashMap<ContentType, T>;
 
-pub type Ident = String;  // TODO: Introduce validity checking to `Ident`
-pub type Content = String;
+// TODO: Introduce validity checking to `Ident` (maybe)
+// `parse::ident` is used any time a user input is converted
+// into an identifier. This mean the only time `Ident` could be
+// invalid is when setting an invalid identifier internally.
+type Ident = String;
+type Content = String;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContentState {

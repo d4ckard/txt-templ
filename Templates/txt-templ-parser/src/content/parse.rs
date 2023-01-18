@@ -253,7 +253,7 @@ pub fn ident(scanner: &mut Scanner) -> Result<Ident, ParseError> {
         }
     };
     debug!("Successfully finished ident");
-    Ok(Ident::from(ident))  // at some point return the ident itself instead
+    Ok(Ident::from(ident))
 }
 
 // <option> ::= "$" <key>
