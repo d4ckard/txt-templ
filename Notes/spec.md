@@ -130,9 +130,9 @@ no value is explicitly given when filling out the template. This way by specifyi
 a default considering the element when filling out the template becomes optional.
 If, however a value if given for the element, this value will overwrite the default value.
 
-Elements of any type an be used as defaults. Defaults may also be nested, meaning a
+Elements of any type can be used as defaults. Defaults may also be nested, meaning a
 default for a key may have a default by itself and so on. If at some point a
-text literal is encountered as the default value, it will be propagated as the default
+text literal is encountered as the default's value[^4], it will be propagated as the default
 for all elements in the chain of nested elements.
 
 A default is specified by following up the identifier of the current element
@@ -159,4 +159,6 @@ ${email:$workemail}
 
 [^2]: This could be very inconvenient at times. Especially the `$` symbol is very hard to avoid using in daily use. This needs improvement.
 
-[^3]: It would be convenient if one could specify a default choice for an option too. This is not possible right now.
+[^3]: It would be convenient if one could specify a default choice for an option too. This is not possible right now. (This might work by implementing choices as constants only visible to the option. Then choosing a default for an option works by selecting this constant!)
+
+[^4]: The default itself may still be of any type, not only of the text literal, but a text literal value must be specified for this element.
