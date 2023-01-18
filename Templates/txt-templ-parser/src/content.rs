@@ -417,3 +417,94 @@ pub enum ContentToken {
     Constant(Ident),
     Option(Box::<ContentToken>),
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn draft_works() {
+        let variants = vec![
+            ("a {name} b $Bye".parse::<ContentTokens>().unwrap(), vec![
+                (ContentIndex::new("name", ContentType::Key), ReqContent::None),
+                (ContentIndex::new("Bye", ContentType::Constant), ReqContent::None),
+            ]),
+            ("{other:{othername:Leto}}".parse::<ContentTokens>().unwrap(), vec![
+                (ContentIndex::new("other", ContentType::Key), ReqContent::Default(ContentIndex::new("othername", ContentType::Key))),
+                (ContentIndex::new("othername", ContentType::Key), ReqContent::Literal("Leto".into())),
+            ]),
+        ];
+        for (tokens, pairs) in variants {
+            let expected = helper::content_map_from_vec(pairs);
+            let output = tokens.draft();
+            assert_eq!(expected, output);
+        }
+    }
+
+    #[test]
+    fn templates_are_parsed_correctly() {
+        // Lenghts of literal text and idents in decreased so tests are more consice
+        // Other tests assert that any idents/text passes
+        let pairs = vec![
+            ("fr-FR\n{key}$Constant${Option}", vec![
+                ContentToken::Key(Ident::from("key"), None),
+                ContentToken::Constant(Ident::from("Constant")),
+                ContentToken::Option(Box::new(ContentToken::Key(Ident::from("Option"), None))),
+            ], Some("fr-FR")),
+            ("S ${Anrede} {name}\n{n}\n$M\n$S", vec![
+                ContentToken::Text("S ".into()),
+                ContentToken::Option(Box::new(ContentToken::Key(Ident::from("Anrede"), None))),
+                ContentToken::Text(" ".into()),
+                ContentToken::Key(Ident::from("name"), None),
+                ContentToken::Text("\n".into()),
+                ContentToken::Key(Ident::from("n"), None),
+                ContentToken::Text("\n".into()),
+                ContentToken::Constant(Ident::from("M")),
+                ContentToken::Text("\n".into()),
+                ContentToken::Constant(Ident::from("S")),
+            ], None),
+            ("Sehr geehrte Frau {name}\n{nachricht}\nMit freundlichen Grüßen\nBar", vec![
+                ContentToken::Text("Sehr geehrte Frau ".into()),
+                ContentToken::Key(Ident::from("name"), None),
+                ContentToken::Text("\n".into()),
+                ContentToken::Key(Ident::from("nachricht"), None),
+                ContentToken::Text("\nMit freundlichen Grüßen\nBar".into()),
+            ], None),
+            ("{name:Peter} bla ${bye:{mfg:MfG}}", vec![
+                ContentToken::Key(Ident::from("name"), Some(Box::new(ContentToken::Text("Peter".into())))),
+                ContentToken::Text(" bla ".into()),
+                ContentToken::Option(Box::new(
+                    ContentToken::Key(Ident::from("bye"), Some(Box::new(
+                        ContentToken::Key(Ident::from("mfg"), Some(Box::new(
+                            ContentToken::Text("MfG".into())   
+                        )))   
+                    )))
+                ))
+            ], None)
+        ];
+        for (template, tokens, locale_str) in pairs {
+            let result: ContentTokens = template.parse().unwrap();
+            if let Some(locale_str) = locale_str {
+                let locale: Locale = locale_str.parse().unwrap();
+                assert_eq!(*result.locale_ref(), locale);
+            }
+            for (idx, token) in result.tokens_ref().iter().enumerate() {
+                assert_eq!(token, tokens.get(idx).unwrap());
+            }
+        }
+    }
+
+
+    mod helper {
+        use super::*;
+
+        pub fn content_map_from_vec(v: Vec<(ContentIndex, ReqContent)>) -> RequiredContent {
+            let mut map = RequiredContent::new();
+            for (idx, value) in v {
+                map.insert(&idx, value);
+            }
+            map
+        }
+    }
+}
