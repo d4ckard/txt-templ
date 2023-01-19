@@ -12,7 +12,7 @@ The format offers three types of variable elements: keys, options and constants.
 When filling out (compiling) a template, all of these elements will be
 translated into a text literal which is inserted in place of the element.
 More information on all features provided by the format are found in the
-[format specification](spec.md).
+[format specification](Notes/spec.md).
 
 ## Next up
 
