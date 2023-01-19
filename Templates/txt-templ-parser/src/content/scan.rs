@@ -1,4 +1,3 @@
-use super::parse::Terminals;
 use log::{debug, trace};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
@@ -64,6 +63,14 @@ impl Cursor {
     }
 }
 
+// The scanner uses layers of virtual cursors which
+// advance in the input character by character but
+// keep their respective starting positions so they
+// can go back there to restart on failures. (This might change at some point)
+// The current virtual cursor layer is collaped if
+// a lexical error is encountered! This means the parser
+// only needs to perform manual aborts if a syntax error
+// is raised in the parser itself.
 pub struct Scanner {
     cursor: Cursor,
     chars: Vec<char>,
@@ -110,15 +117,16 @@ impl Scanner {
         }
     }
 
-    pub fn take(&mut self, terminal: Terminals) -> Result<(), ScanError> {
-        if let Some(character) = self.current_char() {
-            if terminal as u8 as char == character {
+    // Scan a single character
+    pub fn take(&mut self, character: char) -> Result<(), ScanError> {
+        if let Some(current) = self.current_char() {
+            if character == current {
                 self.cursor.inc();
-                debug!("Took character '{}'  succesfully", terminal as u8 as char);
+                debug!("Took character '{}'  succesfully", character);
                 Ok(())
             } else {
                 let symbol = UnexpectedSymbol{
-                    found: character,
+                    found: current,
                     expected: None,
                     position: self.cursor.collapse(&self.chars),
                 };
@@ -126,20 +134,35 @@ impl Scanner {
                 Err(ScanError::UnexpectedSymbol(symbol))
             }
         } else {
-            debug!("Failed to take character '{}': Hit end of input", terminal as u8 as char);
+            debug!("Failed to take character '{}': Hit end of input", character);
             Err(ScanError::UnexpectedEndOfInput(self.cursor.collapse(&self.chars)))            
         }
     }
 
+    // Scan a constant sequence of characters (e.g. a keyword)
+    // The successful result is not returned because it would match the input
+    pub fn take_str(&mut self, s: &str) -> Result<(), ScanError> {
+        for character in s.chars() {
+            let result = self.take(character);
+            if result.is_err() {
+                return result;
+            }
+        }
+
+        Ok(())
+    }
+
+    // Scan character by character
     pub fn scan(&mut self, callback: impl Fn(char) -> Option<Action>) -> Result<String, ScanError> {
-        self.scan_str(|s| {
-            // Unwrap because `scan_str` always pushes a char to the sequence
+        self.scan_seq(|seq| {
+            // Unwrap because `scan_seq` always pushes a char to the sequence
             // before evoking the callback
-            callback(s.chars().last().unwrap())
+            callback(seq.chars().last().unwrap())
         })
     }
 
-    pub fn scan_str(&mut self, callback: impl Fn(&str) -> Option<Action>) -> Result<String, ScanError> {
+    // Scan dynamic sequences of characters
+    pub fn scan_seq(&mut self, callback: impl Fn(&str) -> Option<Action>) -> Result<String, ScanError> {
         let mut sequence = String::new();
         let mut require = None;
         let mut request = false;
@@ -247,8 +270,8 @@ impl PosAsLines for Vec<char> {
 
 #[derive(Debug)]
 pub enum Action {
-    Request,
-    Return,
+    Request,  // Try to get another character but still return a success if this failed
+    Return,  // Return a success
     Require(char),  // Like request but the next character has the be `char`
 }
 

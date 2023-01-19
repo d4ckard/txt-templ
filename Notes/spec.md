@@ -160,7 +160,7 @@ ${email:$workemail}
 
 ## Locale
 The optional locale setting at the start of the template enabes
-language or region specific processing. If the locale is missing
+language or region specific processing[^5]. If the locale is missing
 from the template, `en-US` is used as the default locale.
 A locale is considered well-formatted if it is a valid
 [Unicode Locale Identifier](https://unicode.org/reports/tr35/tr35.html#Unicode_locale_identifier).
@@ -168,7 +168,7 @@ A locale is considered well-formatted if it is a valid
 The locale setting is specified using the *keyword* `locale` followed
 by a colon `:` and valid locale string. The locale string is terminated by
 a new-line character (`\n`).
-The colon delimiting the `locale` *keyword* from the locale string
+The colon delimiting the `locale` keyword from the locale string
 may have optional whitespace characters on both sides.
 
 ### Examples
@@ -193,3 +193,5 @@ Sehr geehrter Herr {name}, ...
 [^3]: It would be convenient if one could specify a default choice for an option too. This is not possible right now. (This might work by implementing choices as constants only visible to the option. Then choosing a default for an option works by selecting this constant!)
 
 [^4]: The default itself may still be of any type, not only of the text literal, but a text literal value must be specified for this element.
+
+[^5]: None if this is implemented at this point but having it enables adding spell checking etc. later on

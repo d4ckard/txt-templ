@@ -483,7 +483,7 @@ mod tests {
         // Lenghts of literal text and idents in decreased so tests are more consice
         // Other tests assert that any idents/text passes
         let pairs = vec![
-            ("fr-FR\n{key}$Constant${Option}", vec![
+            ("locale:fr-FR\n{key}$Constant${Option}", vec![
                 ContentToken::Key(Ident::from("key"), None),
                 ContentToken::Constant(Ident::from("Constant")),
                 ContentToken::Option(Box::new(ContentToken::Key(Ident::from("Option"), None))),

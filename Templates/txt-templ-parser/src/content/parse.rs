@@ -13,7 +13,10 @@ pub fn template(scanner: &mut Scanner) -> Result<ContentTokens, UserError> {
         Ok(locale) => ContentTokens::from(locale),
         Err(e) => {
             let mut tokens = ContentTokens::new();
-            tokens.add_friendly(e);
+            tokens.add_friendly(e);  // Only raise a waring in case parsing the locale failed.
+                                     // The warning is rasied, because one might have tried to
+                                     // set the locale but failed. If the error was silent, the
+                                     // user would not know about the fact that en-US will be used.
             tokens
         },
     };
@@ -35,7 +38,7 @@ pub fn template(scanner: &mut Scanner) -> Result<ContentTokens, UserError> {
 // <item> ::= <key> | <option> | <constant> | <text>
 pub fn item(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
     scanner.begin();
-    let sequence = scanner.scan_str(|sequence| match sequence {
+    let sequence = scanner.scan_seq(|sequence| match sequence {
         "${" => Some(Action::Return),
         "$" => Some(Action::Require('{')),
         "{" => Some(Action::Return),
@@ -77,8 +80,46 @@ pub fn item(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
 pub fn locale(scanner: &mut Scanner) -> Result<Locale, UserError> {
     debug!("Starting locale");
     scanner.begin();
-    // Falls es eine locale gibt, muss sie valide sein. Sonst nicht
+    // Locale keyword
+    const LOCALE_KEYWORD: &str = "locale";
+    if let Err(e) = scanner.take_str(LOCALE_KEYWORD) {
+        debug!("Didn't find locale keyword");
+        let e = UserError {
+            parse_error: ParseError::LexicalError(e),
+            context: ContextMsg::InvalidContainedIn(format!("keyword {}", LOCALE_KEYWORD)),
+            possible: PossibleMsg::DidYouMean(LOCALE_KEYWORD.to_owned()),
+        };
+        return Err(e);
+    }
+    let ws = |scanner: &mut Scanner| {
+        // Scan any number if whitespace characters. Nothing will
+        // happen is none are encountered.
+        scanner.begin();
+        if scanner.scan(|symbol| match symbol {
+            any if any.is_whitespace() => Some(Action::Request),
+            _ => None,
+        }).is_ok() {
+            // The new scan layer at the start of this closure will not
+            // be commit or destroyed if the callback was successful.
+            // We commit here to continue after the last whitespace character.
+            scanner.commit();
+        }
+    };
 
+    // Colon delimiter with optional whitespace on both sides
+    ws(scanner);
+    if let Err(e) = scanner.take(Terminals::Colon.into()) {
+        debug!("Failed to finish locale setting (Missing Colon)");
+        let e = UserError {
+            parse_error: ParseError::LexicalError(e),
+            context: ContextMsg::InvalidContainedIn("locale setting".to_owned()),
+            possible: PossibleMsg::DidYouForget("to add a colon between the locale keyword and literal".to_owned()),
+        };
+        return Err(e);
+    };
+    ws(scanner);
+
+    // Locale literal
     let input = match chars(scanner) {
         Ok(chars) => chars,
         Err(e) => {
@@ -100,7 +141,8 @@ pub fn locale(scanner: &mut Scanner) -> Result<Locale, UserError> {
             return Err(e);
         }
     };
-    if let Err(e) = scanner.take(Terminals::Nl) {
+    // Terminating new-line character
+    if let Err(e) = scanner.take('\n') {
         debug!("Failed to finish locale (Missing '\\n')");
         let e = UserError {
             parse_error: ParseError::LexicalError(e),
@@ -171,7 +213,7 @@ pub fn chars(scanner: &mut Scanner) -> Result<String, UserError> {
 pub fn key(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
     debug!("Starting key");
     scanner.begin();
-    if let Err(e) = scanner.take(Terminals::LBrace) {
+    if let Err(e) = scanner.take(Terminals::LBrace.into()) {
         debug!("Failed to finish key (Missing LBrace)");
         let e = UserError {
             parse_error: ParseError::LexicalError(e),
@@ -203,7 +245,7 @@ pub fn key(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
             return Err(e);
         },
     };
-    if let Err(e) = scanner.take(Terminals::RBrace) {
+    if let Err(e) = scanner.take(Terminals::RBrace.into()) {
         debug!("Failed to finish key (Missing RBrace)");
         let e = UserError {
             parse_error: ParseError::LexicalError(e),
@@ -221,7 +263,7 @@ pub fn key(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
 pub fn default(scanner: &mut Scanner) -> Result<Option<ContentToken>, UserError> {
     debug!("Starting default");
     scanner.begin();
-    if let Err(_) = scanner.take(Terminals::Colon) {
+    if let Err(_) = scanner.take(Terminals::Colon.into()) {
         debug!("Failed to finish default (Missing colon)");
         return Ok(None);
     }
@@ -260,7 +302,7 @@ pub fn ident(scanner: &mut Scanner) -> Result<Ident, ParseError> {
 pub fn option(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
     debug!("Starting options");
     scanner.begin();
-    if let Err(e) = scanner.take(Terminals::Cash) {
+    if let Err(e) = scanner.take(Terminals::Cash.into()) {
         debug!("Failed to finish options (Missing Cash)");
         let e = UserError {
             parse_error: ParseError::LexicalError(e),
@@ -287,7 +329,7 @@ pub fn constant(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
     debug!("Starting constant");
     debug!("Scanner is at: {}", scanner.current_char().unwrap());
     scanner.begin();
-    if let Err(e) = scanner.take(Terminals::Cash) {
+    if let Err(e) = scanner.take(Terminals::Cash.into()) {
         debug!("Failed to finish constant (Missing Cash)");
         let e = UserError {
             parse_error: ParseError::LexicalError(e),
@@ -319,9 +361,14 @@ pub fn constant(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
 pub enum Terminals {
     LBrace = b'{',
     RBrace = b'}',
-    Cash = b'$',
-    Colon = b':',
-    Nl = b'\n',
+    Cash   = b'$',
+    Colon  = b':',
+}
+
+impl Into<char> for Terminals {
+    fn into(self) -> char {
+        self as u8 as char
+    }
 }
 
 // Trait which can be implementend on any potential terminal or non-terminal symbol
@@ -337,7 +384,7 @@ impl Symbol for char {
         match self {
             // Don't consider ':' here because ':' is only a terminal
             // in the context of a key
-            '{' | '}' | '$'=> true,
+            '{' | '}' | '$' | ':' => true,
             _ => false,
         }
     }
@@ -454,17 +501,24 @@ mod tests {
         use super::*;
 
         #[test]
-        fn locales_match_spec() {
+        fn locales_are_accepted_and_correct() {
             let cases = vec![
-                ("en_US\n", "Locales require `locale` keyword"),
-                ("locale:en-US", "Locales require newline behind locale string"),
-                ("locale en-US\n", "Locales require colon delimiter"),
+                ("locale \n :  \t en_us\n", "Delimiter can be surrounded by whitespaces", "en-US"),
+                ("locale:fr-FR\n", "Whitespaces are optional", "fr-FR"),
             ];
-            helper::test_incorrect_cases(locale, cases);
-            let cases = vec![
-                ("locale \n :  \t en_us", "Delimiter can be surrounded by whitespaces"),
-            ];
-            helper::test_correct_cases(locale, cases);
+            for (variant, case, locale_str) in cases {
+                let mut scanner = Scanner::new(variant);
+                let locale_result = locale(&mut scanner)
+                    .expect(&format!("Valid locale setting was falsely rejected. Case: {}", case));
+                let locale_expected: Locale = locale_str.parse().unwrap();
+                assert_eq!(locale_result, locale_expected,
+                    "Accepted locale setting did not return the expected locale. Case: {}", case);
+            }
+
+            // Ensure the locale setting itself is optional
+            let content_tokens: ContentTokens = "example text literal".parse().unwrap();
+            let expected_locale: Locale = "en-US".parse().unwrap();
+            assert_eq!(&expected_locale, content_tokens.locale_ref());
         }
 
         #[test]
@@ -539,6 +593,17 @@ mod tests {
         use super::*;
 
         #[test]
+        fn locales_are_rejected() {
+            let cases = vec![
+                ("en_US\n", "Locales require `locale` keyword"),
+                ("locale:en-US", "Locales require newline behind locale string"),
+                ("locale en-US\n", "Locales require colon delimiter"),
+                (" anything locale:en-US\n", "Locale keyword has to be at the very start of the file"),
+            ];
+            helper::test_incorrect_cases(locale, cases);
+        }
+
+        #[test]
         fn keys_are_rejected() {
             let cases = vec![
                 ("name", "is missing braces"),
@@ -607,7 +672,7 @@ mod tests {
             }
         }
 
-        pub fn test_correct_cases<T, E>(
+        /*pub fn test_correct_cases<T, E>(
             parse_fn: fn(&mut Scanner) -> Result<T, E>,
             cases: Vec<(&str, &str)>,
         )
@@ -623,7 +688,7 @@ mod tests {
                     case,
                 );
             }
-        }
+        }*/
 
         pub fn test_incorrect_cases<T, E>(
             parse_fn: fn(&mut Scanner) -> Result<T, E>,
