@@ -1,37 +1,14 @@
-# Grammer of the templating language
+# EBNF grammar
 
-## Examples which should be valid at some point:
-
-```
-Sehr ${a} {n},
-{m}
-$Mfg
-$MyName  
-```
-```
-Sehr ${Anrede} {name},
-{nachricht}
-$Mfg
-$Sender
-```
-```
-Sehr geehrte Frau {name},{nachricht}
-Mit freundlichen Grüßen
-Bar
-```
-
-## EBNF grammar
 ```bnf
-<template>		::= <settings>? <token>+
-<settings>    ::= <setting>+ "end-of-settings!"
-<setting>     ::= <locale> /* |  any other settings */
+<template>		::= <locale>? <element>+
 <locale>      ::= "locale" <whitespaces> ":" <whitespaces> /* a valid locale value (managed externally) */
-<token>			  ::= <text> | <key> | <option> | <constant>
+<element>			::= <text> | <key> | <option> | <constant>
 <text>     		::= (<chars> | <whitspace> | [0-9])+
 <key>      		::= "{" <ident> <default>? "}"
 <option>   		::= "${" <ident> <default>? "}" 
 <constant> 		::= "$" <ident>
-<default>  		::= ":" <token>
+<default>  		::= ":" <element>
 <ident>    		::= (<char> | [0-9])+
 <whitspace>		::= (" " | "\t" | "\n")
 <whitspaces>	::= <whitspace>+
