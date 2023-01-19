@@ -454,9 +454,17 @@ mod tests {
         use super::*;
 
         #[test]
-        fn locales_are_accepted() {
-            let locales = vec!["en_US\nHallo", "fr_FR\n{name}"];
-            helper::test_correct_variants(locale, locales);
+        fn locales_match_spec() {
+            let cases = vec![
+                ("en_US\n", "Locales require `locale` keyword"),
+                ("locale:en-US", "Locales require newline behind locale string"),
+                ("locale en-US\n", "Locales require colon delimiter"),
+            ];
+            helper::test_incorrect_cases(locale, cases);
+            let cases = vec![
+                ("locale \n :  \t en_us", "Delimiter can be surrounded by whitespaces"),
+            ];
+            helper::test_correct_cases(locale, cases);
         }
 
         #[test]
@@ -540,7 +548,7 @@ mod tests {
                 ("{ /t\n}", "only contains whitespace charactes"),
                 ("{ /tsf\n}", "contains whitespace charactes"),
             ];
-            helper::test_incorrect_variants(key, cases);
+            helper::test_incorrect_cases(key, cases);
         }
 
         #[test]
@@ -550,7 +558,7 @@ mod tests {
                 ("*)&%%_)+|", "only contains invalid characters"),
                 ("&*!abc", "starts out with invalid characters"),
             ];
-            helper::test_incorrect_variants(ident, cases);
+            helper::test_incorrect_cases(ident, cases);
         }
 
         #[test]
@@ -561,7 +569,7 @@ mod tests {
                 ("${}", "is missing an identifier"),
                 ("$ {name}", "has a whitespace between the dollar sign and the first brace"),
             ];
-            helper::test_incorrect_variants(option, cases);
+            helper::test_incorrect_cases(option, cases);
         }
 
         #[test]
@@ -570,7 +578,7 @@ mod tests {
                 ("$ name", "has a whitespace between the dollar sign and the ident"),
                 ("${name}", "has braces around it's ident"),
             ];
-            helper::test_incorrect_variants(constant, cases);
+            helper::test_incorrect_cases(constant, cases);
         }
 
         #[test]
@@ -579,7 +587,7 @@ mod tests {
                 ("{}\nsf{dsf}$", "contains invalid characters"),
                 ("$$}}{}$", "only contains invalid characters"),
             ];
-            helper::test_incorrect_variants(text, cases);
+            helper::test_incorrect_cases(text, cases);
         }
     }
 
@@ -599,7 +607,25 @@ mod tests {
             }
         }
 
-        pub fn test_incorrect_variants<T, E>(
+        pub fn test_correct_cases<T, E>(
+            parse_fn: fn(&mut Scanner) -> Result<T, E>,
+            cases: Vec<(&str, &str)>,
+        )
+        where
+            T: std::fmt::Debug, E: std::error::Error,
+        {
+            for (variant, case) in cases {
+                let mut scanner = Scanner::new(&variant);
+                assert!(
+                    parse_fn(&mut scanner).is_ok(),
+                    "A valid variant: '{}' was falsely rejected. Case: {}",
+                    variant,
+                    case,
+                );
+            }
+        }
+
+        pub fn test_incorrect_cases<T, E>(
             parse_fn: fn(&mut Scanner) -> Result<T, E>,
             cases: Vec<(&str, &str)>,
         )
@@ -610,7 +636,7 @@ mod tests {
                 let mut scanner = Scanner::new(&variant);
                 assert!(
                     parse_fn(&mut scanner).is_err(),
-                    "An invalid variant: '{}', which {} was falsely accepted!", 
+                    "An invalid variant: '{}' was falsely accepted! Case: {}", 
                     variant,
                     case,
                 );            

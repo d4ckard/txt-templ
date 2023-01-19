@@ -7,6 +7,9 @@ A template may contain four different types of elements:
   3. [Options](#options)
   4. [Constants](#constants)
 
+Additionally a template may contain an optional
+[locale setting](#locale) at the beginning of the template.
+
 
 ## Text literals
 By default any plain text in a template is considered a text literal.
@@ -155,9 +158,37 @@ ${email:$workemail}
 ```
 
 
+## Locale
+The optional locale setting at the start of the template enabes
+language or region specific processing. If the locale is missing
+from the template, `en-US` is used as the default locale.
+A locale is considered well-formatted if it is a valid
+[Unicode Locale Identifier](https://unicode.org/reports/tr35/tr35.html#Unicode_locale_identifier).
+
+The locale setting is specified using the *keyword* `locale` followed
+by a colon `:` and valid locale string. The locale string is terminated by
+a new-line character (`\n`).
+The colon delimiting the `locale` *keyword* from the locale string
+may have optional whitespace characters on both sides.
+
+### Examples
+Slightly different ways of setting a template's locale to german:
+
+```
+locale : de-DE
+Sehr geehrte Frau {name}, ...
+```
+
+```
+locale: de_DE
+Sehr geehrter Herr {name}, ...
+```
+
+
+
 [^1]: More specifically text literals may contain any valid [unicode scalar value](https://www.unicode.org/glossary/#unicode_scalar_value) as text literals are represented as lists of [rust chars](https://doc.rust-lang.org/std/primitive.char.html) internally.
 
-[^2]: This could be very inconvenient at times. Especially the `$` symbol is very hard to avoid using in daily use. This needs improvement.
+[^2]: This could be very inconvenient at times. Especially the `$` symbol is very hard to avoid using in daily use. This needs improvement (Maybe by using the symbol twice: e.g. `$$` (like makefiles)).
 
 [^3]: It would be convenient if one could specify a default choice for an option too. This is not possible right now. (This might work by implementing choices as constants only visible to the option. Then choosing a default for an option works by selecting this constant!)
 
