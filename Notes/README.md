@@ -1,1 +1,0 @@
-# Ideas, plans and docs
