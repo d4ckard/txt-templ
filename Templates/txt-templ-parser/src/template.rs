@@ -53,6 +53,21 @@ mod tests {
             helper::test_fill_out("Hello {other:Atreides}, I am $name.\n${SeeOff}", "Hello Leto, I am Paul.\nSee You", "Atreides example greeting",
                 uc, ucs);
         }
+        {
+            let mut ucs = UserContentState::new();
+            ucs.map_constant("Ich", "Paul");
+            ucs.map_option("Anrede", new_choice("m", "Sehr geehrter Herr"));
+            ucs.map_option("Anrede", new_choice("w", "Sehr geehrte Frau"));
+            ucs.map_constant("Mfg", "Mit freundlichen Grüßen");
+            let mut uc = UserContent::new();
+            uc.map_key("Adressat", "Jessica");
+            uc.map_key("nachricht", "ich bin der Kwisatz Haderach");
+            uc.map_choice("Anrede", "w");
+            helper::test_fill_out("${Anrede} {Adressat}, {nachricht}\n$Mfg\n$Ich",
+                "Sehr geehrte Frau Jessica, ich bin der Kwisatz Haderach\nMit freundlichen Grüßen\nPaul",
+                "Atreides example message",
+                uc, ucs);
+        }
     }
 
     #[test]
