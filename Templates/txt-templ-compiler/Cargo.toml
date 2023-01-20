@@ -1,5 +1,5 @@
 [package]
-name = "txt-templ-parser"
+name = "txt-templ-compiler"
 version = "0.1.0"
 edition = "2021"
 

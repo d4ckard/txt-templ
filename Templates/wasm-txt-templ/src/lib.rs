@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 extern crate console_error_panic_hook;
-use txt_templ_parser::template;
-use txt_templ_parser::content::{UserContent, UserContentState};
+use txt_templ_compiler::template;
+use txt_templ_compiler::content::{UserContent, UserContentState};
 
 #[wasm_bindgen]
 extern {
