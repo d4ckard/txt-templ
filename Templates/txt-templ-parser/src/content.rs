@@ -4,8 +4,6 @@ pub use parse::UserError;
 use scan::Scanner;
 
 use unic_locale::{Locale, locale};
-use crate::utils::LOGGING;
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
@@ -22,6 +20,7 @@ type TypeMap<T> = HashMap<ContentType, T>;
 type Ident = String;
 type Content = String;
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContentState {
     pub constants: IdentMap<Content>,
@@ -58,6 +57,7 @@ impl UserContentState {
     }
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContent {
     pub keys: IdentMap<Content>,
@@ -81,6 +81,7 @@ impl UserContent {
     }
 }
 
+// TODO: Turn this into a macro
 pub fn new_choice(ident: &str, content: &str) -> (Ident, Content) {
     (Ident::from(ident), Content::from(content))
 }
@@ -175,7 +176,7 @@ impl RequiredContent {
 
     pub fn add_keys(&mut self, mut keys: IdentMap<Content>) {
         if let Some(entries) = self.0.get_mut(&ContentType::Key) {
-            // Mov every piece of content for each required key
+            // Move every piece of content for each required key
             // into the required key entries.
             for (ident, value) in entries {
                 if let Some(key) = keys.remove(ident) {
@@ -278,7 +279,7 @@ impl std::fmt::Display for ContentType {
 #[derive(Debug)]
 pub struct ContentTokens {
     tokens: Vec<ContentToken>,
-    locale: Locale,
+    pub locale: Locale,
     friendly_errors: Vec<UserError>,
 }
 
@@ -311,19 +312,17 @@ impl ContentTokens {
         self.tokens.len()
     }
 
-    pub fn tokens_ref(&self) -> &Vec<ContentToken> {
+    fn tokens_ref(&self) -> &Vec<ContentToken> {
         &self.tokens
     }
 
-    pub fn locale_ref(&self) -> &Locale {
+    fn locale_ref(&self) -> &Locale {
         &self.locale
     }
 
     // Use the content map to substitue all values in `tokens` until
     // the entire template has been filled out.
     pub fn fill_out(&self, content: FullContent) -> Result<String, FillOutError> {
-        Lazy::force(&LOGGING);
-
         let mut output = String::new();
 
         // Try to add the content for `token` to `output`
@@ -427,7 +426,6 @@ impl std::str::FromStr for ContentTokens {
     
     // Attempt to parse the given string into a `ContentTokens` instance
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Lazy::force(&LOGGING);
         let mut scanner = Scanner::new(s);
         parse::template(&mut scanner)
     }

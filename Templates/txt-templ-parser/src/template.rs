@@ -30,9 +30,9 @@ impl Template {
 #[derive(thiserror::Error, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TemplateError {
-    #[error("transparent")]
+    #[error(transparent)]
     UserError(#[from] UserError),
-    #[error("transparent")]
+    #[error(transparent)]
     FillOutError(#[from] FillOutError),
 }
 

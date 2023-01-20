@@ -128,13 +128,13 @@ pub fn locale(scanner: &mut Scanner) -> Result<Locale, UserError> {
             return Err(e);
         }
     };
-    let locale: Locale = match input.parse() {
+    let locale = match unic_locale::parser::parse_locale(input) {
         Ok(locale) => locale,
         Err(e) => {
             debug!("Found locale is invalid");
             scanner.abort();
             let e = UserError {
-                parse_error: ParseError::LocaleError(Box::new(e)),
+                parse_error: ParseError::LocaleError(e),
                 context: ContextMsg::InvalidContainedIn("locale".to_owned()),
                 possible: PossibleMsg::None,
             };
@@ -486,19 +486,26 @@ impl std::fmt::Display for PossibleMsg {
 pub enum ParseError {
     #[error(transparent)]
     LexicalError(#[from] ScanError),
-    #[error("Locale Error")]
+    #[error(transparent)]
     #[cfg_attr(feature = "serde", serde(skip_serializing, skip_deserializing))]
-    LocaleError(#[source] Box<dyn std::error::Error>),    
+    LocaleError(#[from] unic_locale::parser::ParserError),    
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::LOGGING;
     use once_cell::sync::Lazy;
 
     mod correct {
         use super::*;
+
+        #[test]
+        fn colon_terminal_symbol_may_stand_alone_in_text() {
+            let variants = vec!["This is some text with the message: colons are cool"];
+            // We test against the template parse function here, because the text parse
+            // function will actually accept this.
+            helper::test_correct_variants(template, variants);
+        }
 
         #[test]
         fn locales_are_accepted_and_correct() {
@@ -523,7 +530,7 @@ mod tests {
 
         #[test]
         fn defaults_are_accepted() {
-            Lazy::force(&LOGGING);
+            Lazy::force(&helper::LOGGING);
             let key_defaults = vec![
                 "{name:hallo}",  // `text` default for key
                 "{name:$Me}",  // `constant` default for key
@@ -561,14 +568,14 @@ mod tests {
 
         #[test]
         fn constants_are_accepted() {
-            Lazy::force(&LOGGING);
+            Lazy::force(&helper::LOGGING);
             let options = vec!["$MyName", "$myname", "$me13", "$3.141"];
             helper::test_correct_variants(constant, options);
         }
 
         #[test]
         fn templates_are_accepted() {
-            Lazy::force(&LOGGING);
+            Lazy::force(&helper::LOGGING);
             let templates = vec![
                 "{key}$Constant${Option}",
                 "Sehr ${Anrede} {name}\n{nachricht}\n$Mfg\n$Sender",
@@ -658,6 +665,11 @@ mod tests {
 
     mod helper {
         use super::*;
+
+        // Initialize logging for a test
+        pub static LOGGING: Lazy<()> = Lazy::new(|| {
+            env_logger::init();
+        });
 
         pub fn test_correct_variants<T, E>(
             parse_fn: fn(&mut Scanner) -> Result<T, E>,
