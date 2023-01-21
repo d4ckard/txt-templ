@@ -23,7 +23,9 @@ type Content = String;
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContentState {
+    // Map of constant identifiers to literal content
     pub constants: IdentMap<Content>,
+    // Map of option identifiers to choice identifiers to literal content
     pub options: IdentMap<IdentMap<Content>>,
 }
 
