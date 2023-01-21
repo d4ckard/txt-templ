@@ -13,10 +13,6 @@ type IdentMap<C> = HashMap<Ident, C>;
 // Map content type co map of content
 type TypeMap<T> = HashMap<ContentType, T>;
 
-// TODO: Introduce validity checking to `Ident` (maybe)
-// `parse::ident` is used any time a user input is converted
-// into an identifier. This mean the only time `Ident` could be
-// invalid is when setting an invalid identifier internally.
 type Ident = String;
 type Content = String;
 
@@ -40,7 +36,7 @@ impl UserContentState {
         self.constants.insert(Ident::from(ident), Content::from(content));
     }
 
-    /// Use this  method in combination with `new_choice`: `map_option("opt-name", new_choice("choice", "content"))`
+    /// Use this  method in combination with `choice!`: `map_option("opt-name", choice!("choice", "content"))`
     pub fn map_option(
         &mut self,
         option: &str, 
@@ -83,10 +79,17 @@ impl UserContent {
     }
 }
 
-// TODO: Turn this into a macro
-pub fn new_choice(ident: &str, content: &str) -> (Ident, Content) {
-    (Ident::from(ident), Content::from(content))
+#[cfg(test)]
+macro_rules! choice {
+    ( $x:expr, $y:expr ) => {
+        {
+            (String::from($x), String::from($y))
+        }
+    }
 }
+#[cfg(test)]
+pub(crate) use choice;
+
 
 // Type containing ALL required content to  fill out a template
 #[derive(Debug)]
@@ -236,8 +239,6 @@ impl RequiredContent {
 impl TryInto<FullContent> for RequiredContent {
     type Error = FillOutError;
 
-    // TODO: This function is really messing with loads of clones! Clean this up.
-    // Also maybe make `validate_content` an associated function of `Content`
     fn try_into(self) -> Result<FullContent, Self::Error> {
         fn validate_content(
             idx: ContentIndex,  // ContentIndex of current element; always passing this is kinda a waste
@@ -276,7 +277,9 @@ impl TryInto<FullContent> for RequiredContent {
         for (token_type, entries) in &self.0 {
             let mut full_type = HashMap::new();
             for (ident, content) in entries {
-                match validate_content(ContentIndex::new(*token_type, &ident), content, &self.0) {
+                let idx = ContentIndex::new(*token_type, &ident);
+
+                match validate_content(idx, &content, &self.0) {
                     Ok(content) => full_type.insert(ident.clone(), content),
                     Err(e) => return Err(e),
                 };

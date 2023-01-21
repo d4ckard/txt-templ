@@ -108,7 +108,7 @@ pub fn locale(scanner: &mut Scanner) -> Result<Locale, UserError> {
 
     // Colon delimiter with optional whitespace on both sides
     ws(scanner);
-    if let Err(e) = scanner.take(Terminals::Colon.into()) {
+    if let Err(e) = scanner.take(':') {
         debug!("Failed to finish locale setting (Missing Colon)");
         let e = UserError {
             parse_error: ParseError::LexicalError(e),
@@ -263,7 +263,7 @@ pub fn key(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
 pub fn default(scanner: &mut Scanner) -> Result<Option<ContentToken>, UserError> {
     debug!("Starting default");
     scanner.begin();
-    if let Err(_) = scanner.take(Terminals::Colon.into()) {
+    if let Err(_) = scanner.take(':') {
         debug!("Failed to finish default (Missing colon)");
         return Ok(None);
     }
@@ -362,7 +362,6 @@ pub enum Terminals {
     LBrace = b'{',
     RBrace = b'}',
     Cash   = b'$',
-    Colon  = b':',
 }
 
 impl Into<char> for Terminals {
@@ -382,9 +381,7 @@ pub trait Symbol {
 impl Symbol for char {
     fn is_terminal(&self) -> bool {
         match self {
-            // Don't consider ':' here because ':' is only a terminal
-            // in the context of a key
-            '{' | '}' | '$' | ':' => true,
+            '{' | '}' | '$' => true,
             _ => false,
         }
     }
@@ -502,8 +499,6 @@ mod tests {
         #[test]
         fn colon_terminal_symbol_may_stand_alone_in_text() {
             let variants = vec!["This is some text with the message: colons are cool"];
-            // We test against the template parse function here, because the text parse
-            // function will actually accept this.
             helper::test_correct_variants(template, variants);
         }
 

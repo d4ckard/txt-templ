@@ -9,7 +9,7 @@ use giveup::Giveup;
 
 // The default path to the file which contains the configuration
 // for the UserContentState
-const USER_CONTENT_STATE_DEFAULT: &str = "$HOME/.template_content_state.yaml";
+const USER_CONTENT_STATE_DEFAULT: &str = ".template_content_state.yaml";
 // The environment variable containing the path to another
 // file which contains the configuration for the UserContentState
 // If this environment variable is set, its path will overwrite the default one
@@ -90,7 +90,9 @@ impl Inputs<WithUserContentDraft> {
                     .with_context(|| format!("Failed to open file {} containing the user content state", &file_name))?
             },
             Err(_) => {
-                File::open(USER_CONTENT_STATE_DEFAULT)
+                let path = dirs::home_dir().context("Failed to get $HOME directory")?
+                    .join(USER_CONTENT_STATE_DEFAULT);
+                File::open(&path)
                     .with_context(|| format!("Failed to open default file {} containing the user content state",
                         USER_CONTENT_STATE_DEFAULT))?
             },

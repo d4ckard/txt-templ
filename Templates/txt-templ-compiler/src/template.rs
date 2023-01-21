@@ -54,7 +54,7 @@ mod tests {
         {
             let mut ucs = UserContentState::new();
             ucs.map_constant("name", "Paul");
-            ucs.map_option("SeeOff", new_choice("CU", "See You"));
+            ucs.map_option("SeeOff", choice!("CU", "See You"));
             let mut uc = UserContent::new();
             uc.map_key("other", "Leto");
             uc.map_choice("SeeOff", "CU");
@@ -64,8 +64,8 @@ mod tests {
         {
             let mut ucs = UserContentState::new();
             ucs.map_constant("Ich", "Paul");
-            ucs.map_option("Anrede", new_choice("m", "Sehr geehrter Herr"));
-            ucs.map_option("Anrede", new_choice("w", "Sehr geehrte Frau"));
+            ucs.map_option("Anrede", choice!("m", "Sehr geehrter Herr"));
+            ucs.map_option("Anrede", choice!("w", "Sehr geehrte Frau"));
             ucs.map_constant("Mfg", "Mit freundlichen Grüßen");
             let mut uc = UserContent::new();
             uc.map_key("Adressat", "Jessica");
@@ -84,7 +84,7 @@ mod tests {
         {
             let mut ucs = UserContentState::new();
             ucs.map_constant(ident, "constant-literal");
-            ucs.map_option(ident, new_choice("only", "choice-literal"));
+            ucs.map_option(ident, choice!("only", "choice-literal"));
             let mut uc = UserContent::new();
             uc.map_key(ident, "key-literal");
             uc.map_choice(ident, "only");
@@ -115,7 +115,7 @@ mod tests {
         }
         {
             let mut ucs = UserContentState::new();
-            ucs.map_option("opt", new_choice("only", "choice-literal"));
+            ucs.map_option("opt", choice!("only", "choice-literal"));
             helper::test_fill_out("${opt:default-literal}", "default-literal", "Value of default used for option without choice", UserContent::new(), ucs);
         }
         {
@@ -126,7 +126,7 @@ mod tests {
         {
             let mut ucs = UserContentState::new();
             ucs.map_constant("workemail", "im@work.com");
-            ucs.map_option("email", new_choice("private", "im@home.com"));
+            ucs.map_option("email", choice!("private", "im@home.com"));
             helper::test_fill_out("${email:$workemail}", "im@work.com", "Default constant used for option without choice", UserContent::new(), ucs);
         }
     }
@@ -136,7 +136,7 @@ mod tests {
     fn defaults_are_used_if_value_is_not_specified() {
         {
             let mut ucs = UserContentState::new();
-            ucs.map_option("opt", new_choice("only", "choice-literal"));
+            ucs.map_option("opt", choice!("only", "choice-literal"));
             helper::test_fill_out("${opt:default-literal}", "default-literal", "Defaults are used for unspecified options; option becomes optional",
                 UserContent::new(), ucs);
         }
@@ -150,7 +150,7 @@ mod tests {
     fn defaults_are_ignored_if_value_is_specified() {
         {
             let mut ucs = UserContentState::new();
-            ucs.map_option("opt", new_choice("only", "choice-literal"));
+            ucs.map_option("opt", choice!("only", "choice-literal"));
             let mut uc = UserContent::new();
             uc.map_choice("opt", "only");
             helper::test_fill_out("${opt:default-literal}", "choice-literal", "Defaults are NOT used for specified options; choice overwrites default",
@@ -178,7 +178,7 @@ mod tests {
         }
         {
             let mut ucs = UserContentState::new();
-            ucs.map_option("opt", new_choice("only", "choice-literal"));
+            ucs.map_option("opt", choice!("only", "choice-literal"));
             let mut uc = UserContent::new();
             uc.map_choice("opt", "only");
             helper::test_fill_out("{key:${opt}}", "choice-literal", "Option elements can be used as defaults", uc, ucs);
@@ -194,20 +194,20 @@ mod tests {
     fn defaults_may_be_nested() {
         {
             let mut ucs = UserContentState::new();
-            ucs.map_option("option", new_choice("only", "choice-literal"));
+            ucs.map_option("option", choice!("only", "choice-literal"));
             helper::test_fill_out("{key:${option:default-literal}}", "default-literal", "Simple nesting", UserContent::new(), ucs);
         }
         /*{  // This currently overflows the stack
             let mut ucs = UserContentState::new();
-            ucs.map_option("opt1", new_choice("only", "choice-literal"));
-            ucs.map_option("opt2", new_choice("only", "choice-literal"));
+            ucs.map_option("opt1", choice!("only", "choice-literal"));
+            ucs.map_option("opt2", choice!("only", "choice-literal"));
             helper::test_fill_out("{key:${opt1:${opt2:{key:default-literal}}}}", "default-literal", "Long nesting", UserContent::new(), ucs);
         }*/
         // Chain of nested elements is stopped if a value was specified for any element in the chain
         {
             let mut ucs = UserContentState::new();
-            ucs.map_option("opt1", new_choice("only", "choice-literal"));
-            ucs.map_option("opt2", new_choice("only", "choice-literal"));
+            ucs.map_option("opt1", choice!("only", "choice-literal"));
+            ucs.map_option("opt2", choice!("only", "choice-literal"));
             let mut uc = UserContent::new();
             uc.map_choice("opt2", "only");
             helper::test_fill_out("{key:${opt1:${opt2:{key:default-literal}}}}", "choice-literal", "Default chain stopped by value", uc, ucs);
