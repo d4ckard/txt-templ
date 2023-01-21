@@ -1,4 +1,4 @@
-use std::{fs::File, path::PathBuf, io::Read, process::Command, env};
+use std::{fs::File, path::PathBuf, io::{prelude::*, Read}, process::Command, env};
 use clap::Parser;
 use txt_templ_compiler::template::Template;
 use txt_templ_compiler::{UserContent, UserContentState};
@@ -27,6 +27,24 @@ struct Args {
     /// Set the template source file
     #[arg(value_name = "FILE")]
     file: PathBuf,
+}
+
+trait TemplateYamlExt {
+    type Error;
+    fn user_content_yaml(&self) -> Result<String, Self::Error>;
+}
+
+impl TemplateYamlExt for Template {
+    type Error = anyhow::Error;
+
+    // TODO: Improve option choice usability
+    // maybe by listing all option being commented out
+    fn user_content_yaml(&self) -> Result<String, Self::Error> {
+        let uc_draft = self.required().draft_user_content();
+        let yaml = serde_yaml::to_string(&uc_draft)
+            .context("Failed to convert user content draft to YAML")?;
+        Ok(yaml)
+    }
 }
 
 // Read and parse the given template file
@@ -73,14 +91,19 @@ fn get_user_content_state() -> anyhow::Result<UserContentState> {
 // Open a temporary YAML file containg all entries to UserContent
 // in the user's default editor to allow the user to set the values.
 // The create an instance of UserState from the temporary file.
-fn get_user_content() -> anyhow::Result<UserContent> {
+fn get_user_content(template: &Template) -> anyhow::Result<UserContent> {
     // Create a temporary file
     let temp_file_path = {
         let mut path = env::temp_dir();
         path.push("user-content.yaml");
         path
     };
-    File::create(&temp_file_path).context("Failed to create temporary file")?;
+    let mut file = File::create(&temp_file_path).context("Failed to create temporary file")?;
+
+    // Write the user content draft to the file as YAML
+    let yaml = template.user_content_yaml()?;
+    file.write_all(yaml.as_bytes())
+        .context("Failed to write YAML to temporary file")?;
 
     // Open the temp file in the user's preferred editor
     let editor = env::var(EDITOR).unwrap_or_else(|_| EDITOR_DEFAULT.to_owned());
@@ -102,7 +125,8 @@ fn get_user_content() -> anyhow::Result<UserContent> {
 }
 
 
-// TODO: Generate a draft for UserContent which can be filled out by the user
+// TODO: Improve draft-editing usablility
+// TODO: Write a usage guide of the CLI
 
 fn main() {
     Lazy::force(&Lazy::new(|| env_logger::init()));
@@ -116,7 +140,7 @@ fn main() {
     let ucs = get_user_content_state().giveup("Content State Error");
     log::trace!("Successfully read and parsed user content state:\n{:?}", &ucs);    
 
-    let uc = get_user_content().giveup("Content Error");
+    let uc = get_user_content(&template).giveup("Content Error");
     log::trace!("Successfully read and parsed user content:\n{:?}", &uc);
 
     // Fill out the template

@@ -57,11 +57,11 @@ impl UserContentState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserContent {
-    pub keys: IdentMap<Content>,
-    pub choices: IdentMap<Ident>,
+    pub keys: IdentMap<Content>,  // Map of key identifiers to content literals
+    pub choices: IdentMap<Ident>,  // Map of option identifiers to choice identifers
 }
 
 impl UserContent {
@@ -105,7 +105,7 @@ impl FullContent {
 // Required content
 #[derive(Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum ReqContent {
+pub enum ContentRequirement {
     Literal(Content),  //  Either a piece of content
     Default(ContentIndex),  // Or a reference to another piece of content
     None,
@@ -118,7 +118,7 @@ pub enum ReqContent {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RequiredContent(
     #[cfg_attr(feature = "serde", serde_as(as = "Vec<(_, _)>"))]
-    TypeMap<IdentMap<ReqContent>>,
+    TypeMap<IdentMap<ContentRequirement>>,
 );
 
 impl RequiredContent {
@@ -126,13 +126,13 @@ impl RequiredContent {
         Self(HashMap::new())
     }
 
-    pub fn insert(&mut self, idx: &ContentIndex, content: ReqContent) {
+    pub fn insert(&mut self, idx: &ContentIndex, content: ContentRequirement) {
         match self.0.get_mut(&idx.0) {
             Some(idents) => {
                 idents.insert(idx.1.clone(), content);
             },
             None => {
-                let mut map: HashMap<Ident, ReqContent> = HashMap::new();
+                let mut map: HashMap<Ident, ContentRequirement> = HashMap::new();
                 map.insert(idx.1.clone(), content);
                 self.0.insert(idx.0, map);
             },
@@ -145,7 +145,7 @@ impl RequiredContent {
             // the required constant entries.
             for (ident, value) in entries {
                 if let Some(constant) = constants.remove(ident) {
-                    *value = ReqContent::Literal(constant);
+                    *value = ContentRequirement::Literal(constant);
                 }
             }
         }
@@ -167,7 +167,7 @@ impl RequiredContent {
                     // it into the required optin entries under the identifier
                     // for the option itself
                     if let Some(content) = option.remove(choice) {
-                        *value = ReqContent::Literal(content);
+                        *value = ContentRequirement::Literal(content);
                     }
                 }
             }
@@ -180,10 +180,54 @@ impl RequiredContent {
             // into the required key entries.
             for (ident, value) in entries {
                 if let Some(key) = keys.remove(ident) {
-                    *value = ReqContent::Literal(key);
+                    *value = ContentRequirement::Literal(key);
                 }
             }
         }
+    }
+
+    // Return an instance of user content which contains all required entires
+    // and their respective content literals if there are some.
+    pub fn draft_user_content(&self) -> UserContent {
+        // Find the literal associated with the `ContentRequirement` instance or return an empty string
+        fn get_literal(
+            content: &ContentRequirement,
+            map: &TypeMap<IdentMap<ContentRequirement>>,
+        ) -> String {
+            match content {
+                ContentRequirement::None => "".to_owned(),
+                ContentRequirement::Literal(its_lit) => its_lit.clone(),
+                ContentRequirement::Default(default_idx) => {
+                    let default_idx = default_idx.clone();
+
+                    let content_opt = match map.get(&default_idx.0) {
+                        Some(entries) => entries.get(&default_idx.1),
+                        None => return "".to_owned(),
+                    };
+
+                    match content_opt {
+                        Some(content) => get_literal(&content, map),
+                        None => "".to_owned(),
+                    }
+                }
+            }
+        }
+        
+        let mut uc = UserContent::new();
+        // Add all key entries
+        if let Some(key_entries) = self.0.get(&ContentType::Key) {
+            for (ident, content) in key_entries {
+                uc.map_key(&ident, &get_literal(&content, &self.0));
+            }
+        }
+        // Add all choice entires
+        if let Some(option_entries) = self.0.get(&ContentType::Option) {
+            for (ident, content) in option_entries {
+                uc.map_choice(&ident, &get_literal(&content, &self.0));
+            }
+        }
+
+        uc
     }
 }
 
@@ -195,14 +239,14 @@ impl TryInto<FullContent> for RequiredContent {
     fn try_into(self) -> Result<FullContent, Self::Error> {
         fn validate_content(
             idx: ContentIndex,  // ContentIndex of current element; always passing this is kinda a waste
-            content: &ReqContent,
-            map: &TypeMap<IdentMap<ReqContent>>,
+            content: &ContentRequirement,
+            map: &TypeMap<IdentMap<ContentRequirement>>,
         ) -> Result<Content, FillOutError> {
             match content {
-                ReqContent::None => {
+                ContentRequirement::None => {
                     return Err(FillOutError::MissingElement(idx));
                 }
-                ReqContent::Literal(its_lit) => {
+                ContentRequirement::Literal(its_lit) => {
                     let its_lit = its_lit.clone();
                     if its_lit.is_empty() {
                         return Err(FillOutError::EmptyContent(idx));
@@ -210,8 +254,8 @@ impl TryInto<FullContent> for RequiredContent {
                         return Ok(its_lit);  // <- only ok path is literal content
                     }
                 },
-                ReqContent::Default(default_idx) => {
-                    let default_idx = ContentIndex::new(default_idx.1.as_ref(), default_idx.0);
+                ContentRequirement::Default(default_idx) => {
+                    let default_idx = default_idx.clone();
                     let content_opt = match map.get(&default_idx.0) {
                         Some(entries) => entries.get(&default_idx.1),
                         None => return Err(FillOutError::MissingDefaultType(default_idx)),
@@ -225,12 +269,12 @@ impl TryInto<FullContent> for RequiredContent {
             }
         }
 
-        let mut full_content = HashMap::new(); 
+        let mut full_content = HashMap::new();
         
         for (token_type, entries) in &self.0 {
             let mut full_type = HashMap::new();
             for (ident, content) in entries {
-                match validate_content(ContentIndex::new(ident.as_ref(), *token_type), content, &self.0) {
+                match validate_content(ContentIndex::new(*token_type, &ident), content, &self.0) {
                     Ok(content) => full_type.insert(ident.clone(), content),
                     Err(e) => return Err(e),
                 };
@@ -242,12 +286,12 @@ impl TryInto<FullContent> for RequiredContent {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ContentIndex(ContentType, Ident);
 
 impl ContentIndex {
-    pub fn new(ident: &str, content_type: ContentType) -> Self {
+    pub fn new(content_type: ContentType, ident: &str) -> Self {
         Self(content_type, Ident::from(ident))
     }
 }
@@ -312,13 +356,6 @@ impl ContentTokens {
         self.tokens.len()
     }
 
-    fn tokens_ref(&self) -> &Vec<ContentToken> {
-        &self.tokens
-    }
-
-    fn locale_ref(&self) -> &Locale {
-        &self.locale
-    }
 
     // Use the content map to substitue all values in `tokens` until
     // the entire template has been filled out.
@@ -330,12 +367,12 @@ impl ContentTokens {
             match token {
                 ContentToken::Text(text) => output.push_str(&text),
                 ContentToken::Constant(ident) => {
-                    let content = content.get(ContentIndex::new(ident.as_ref(), ContentType::Constant));
+                    let content = content.get(ContentIndex::new(ContentType::Constant, &ident));
                     output.push_str(content.as_ref());
                 },
                 ContentToken::Key(ident, _) => {
                     output.push_str(
-                        content.get(ContentIndex::new(ident.as_ref(), ContentType::Key)).as_ref()
+                        &content.get(ContentIndex::new(ContentType::Key, &ident))
                     );
                     /*if let Some(default_box) = default_box {
                         return fill_out_token(*default_box, content, output);
@@ -348,7 +385,7 @@ impl ContentTokens {
                             `parse::option` should not allow this!"),
                     };
                     output.push_str(
-                        content.get(ContentIndex::new(ident.as_ref(), ContentType::Option)).as_ref()
+                        &content.get(ContentIndex::new(ContentType::Option, ident.as_ref()))
                     );
                     /*if let Some(default_box) = default_box {
                         return fill_out_token(*default_box, content, output);
@@ -373,24 +410,24 @@ impl ContentTokens {
     pub fn draft(&self) -> RequiredContent {
         let mut map = RequiredContent::new();
 
-        fn draft_token(token: &ContentToken, map: &mut RequiredContent) -> ReqContent {
+        fn draft_token(token: &ContentToken, map: &mut RequiredContent) -> ContentRequirement {
             match token {
-                ContentToken::Text(text) => ReqContent::Literal(Content::from(text)),
+                ContentToken::Text(text) => ContentRequirement::Literal(Content::from(text)),
                 ContentToken::Constant(ident) => {
-                    let token_idx = ContentIndex::new(ident.as_ref(), ContentType::Constant);
-                    map.insert(&token_idx, ReqContent::None);
-                    ReqContent::Default(token_idx)
+                    let token_idx = ContentIndex::new(ContentType::Constant, &ident);
+                    map.insert(&token_idx, ContentRequirement::None);
+                    ContentRequirement::Default(token_idx)
                 },
                 ContentToken::Key(ident, default) => {
-                    let token_idx = ContentIndex::new(ident.as_ref(), ContentType::Key);
+                    let token_idx = ContentIndex::new(ContentType::Key, &ident);
                     match default {
                         Some(default_box) => {
                             let default = draft_token(&**default_box, map);
                             map.insert(&token_idx, default);
                         },
-                        None => map.insert(&token_idx, ReqContent::None),
+                        None => map.insert(&token_idx, ContentRequirement::None),
                     }
-                    ReqContent::Default(token_idx)
+                    ContentRequirement::Default(token_idx)
                 },
                 ContentToken::Option(key_box) => {
                     // Extract the key box from the option
@@ -400,15 +437,15 @@ impl ContentTokens {
                             instance. `parse::option` should not allow this!"),
                     };
 
-                    let token_idx = ContentIndex::new(ident.as_ref(), ContentType::Option);
+                    let token_idx = ContentIndex::new(ContentType::Option, &ident);
                     match default {
                         Some(default_box) => {
                             let default = draft_token(&**default_box, map);
                             map.insert(&token_idx, default);
                         },
-                        None => map.insert(&token_idx, ReqContent::None),
+                        None => map.insert(&token_idx, ContentRequirement::None),
                     }
-                    ReqContent::Default(token_idx)
+                    ContentRequirement::Default(token_idx)
                 },
             }
         }
@@ -461,18 +498,65 @@ mod tests {
     fn draft_works() {
         let variants = vec![
             ("a {name} b $Bye".parse::<ContentTokens>().unwrap(), vec![
-                (ContentIndex::new("name", ContentType::Key), ReqContent::None),
-                (ContentIndex::new("Bye", ContentType::Constant), ReqContent::None),
+                (ContentIndex::new(ContentType::Key, "name"), ContentRequirement::None),
+                (ContentIndex::new(ContentType::Constant, "Bye"), ContentRequirement::None),
             ]),
             ("{other:{othername:Leto}}".parse::<ContentTokens>().unwrap(), vec![
-                (ContentIndex::new("other", ContentType::Key), ReqContent::Default(ContentIndex::new("othername", ContentType::Key))),
-                (ContentIndex::new("othername", ContentType::Key), ReqContent::Literal("Leto".into())),
+                (ContentIndex::new(ContentType::Key, "other"), ContentRequirement::Default(ContentIndex::new(ContentType::Key, "othername"))),
+                (ContentIndex::new(ContentType::Key, "othername"), ContentRequirement::Literal("Leto".into())),
             ]),
         ];
         for (tokens, pairs) in variants {
             let expected = helper::content_map_from_vec(pairs);
             let output = tokens.draft();
             assert_eq!(expected, output);
+        }
+    }
+
+    #[test]  // Ensure the `RequiredContent::user_content_draft` methods works as expected
+    fn user_content_drafts_work() {
+        let user_content_draft = |input: &str| {
+            input.parse::<ContentTokens>().unwrap().draft().draft_user_content()
+        };
+
+        {  // Options and keys are entered into the user content instance
+            let uc = user_content_draft("{key}${option}");
+            let mut expected_uc = UserContent::new();
+            expected_uc.map_key("key", "");
+            expected_uc.map_choice("option", "");
+            assert_eq!(uc, expected_uc);
+        }
+        {  // Defaults are copied into the user content instance
+            let uc = user_content_draft("{key:key-default-literal}${option:option-default-literal}");
+            let mut expected_uc = UserContent::new();
+            expected_uc.map_key("key", "key-default-literal");
+            expected_uc.map_choice("option", "option-default-literal");
+            assert_eq!(uc, expected_uc);
+        }
+        {  // Nested key defaults are entered into the user content instance
+            let uc = user_content_draft("{key:{defaultKey:default-literal}}");
+            let mut expected_uc = UserContent::new();
+            expected_uc.map_key("key", "default-literal");  // Default literals are propagated
+            expected_uc.map_key("defaultKey", "default-literal");
+            assert_eq!(uc, expected_uc);
+        }
+        {  // Nested option defaults are entered into the user content instance
+            let uc = user_content_draft("${option:${defaultOption:default-literal}}");
+            let mut expected_uc = UserContent::new();
+            expected_uc.map_choice("option", "default-literal");  // Default literals are propagated
+            expected_uc.map_choice("defaultOption", "default-literal");
+            assert_eq!(uc, expected_uc);
+        }
+        {  // Default constants are skipped/not entered as defaults into the user content instance
+            let uc = user_content_draft("{key:$constant}${option:$constant}");
+            let mut expected_uc = UserContent::new();
+            expected_uc.map_key("key", "");
+            expected_uc.map_choice("option", "");
+            assert_eq!(uc, expected_uc);
+        }
+        {  // Constants and text literals are not entered into the user content instance
+            let uc = user_content_draft("$constant some funny text literal! $anotherConstant");
+            assert_eq!(uc, UserContent::new());
         }
     }
 
@@ -521,9 +605,9 @@ mod tests {
             let result: ContentTokens = template.parse().unwrap();
             if let Some(locale_str) = locale_str {
                 let locale: Locale = locale_str.parse().unwrap();
-                assert_eq!(*result.locale_ref(), locale);
+                assert_eq!(result.locale, locale);
             }
-            for (idx, token) in result.tokens_ref().iter().enumerate() {
+            for (idx, token) in result.tokens.iter().enumerate() {
                 assert_eq!(token, tokens.get(idx).unwrap());
             }
         }
@@ -533,7 +617,7 @@ mod tests {
     mod helper {
         use super::*;
 
-        pub fn content_map_from_vec(v: Vec<(ContentIndex, ReqContent)>) -> RequiredContent {
+        pub fn content_map_from_vec(v: Vec<(ContentIndex, ContentRequirement)>) -> RequiredContent {
             let mut map = RequiredContent::new();
             for (idx, value) in v {
                 map.insert(&idx, value);

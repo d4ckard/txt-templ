@@ -525,7 +525,7 @@ mod tests {
             // Ensure the locale setting itself is optional
             let content_tokens: ContentTokens = "example text literal".parse().unwrap();
             let expected_locale: Locale = "en-US".parse().unwrap();
-            assert_eq!(&expected_locale, content_tokens.locale_ref());
+            assert_eq!(expected_locale, content_tokens.locale);
         }
 
         #[test]

@@ -3,27 +3,35 @@ use crate::content::*;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug)]
-pub struct Template(ContentTokens);
+pub struct Template {
+    tokens: ContentTokens,
+    required: RequiredContent,
+}
 
 impl Template {
     // Create a new `Template` instance by parsing the input string
     pub fn parse(s: &str) -> Result<Self, TemplateError> {
-        Ok(Self(s.parse()?))
+        let tokens: ContentTokens = s.parse()?;
+        let required = tokens.draft();
+        Ok(Self{ tokens, required })
     }
     
     // Fill out the template
     pub fn fill_out(
-        &self,
+        mut self,
         user_content: UserContent,
         user_content_state: UserContentState
     ) -> Result<String, TemplateError> {
-        let mut required = self.0.draft();
-        required.add_constants(user_content_state.constants);
-        required.add_options(user_content.choices, user_content_state.options);
-        required.add_keys(user_content.keys);
+        self.required.add_constants(user_content_state.constants);
+        self.required.add_options(user_content.choices, user_content_state.options);
+        self.required.add_keys(user_content.keys);
 
-        let content: FullContent = required.try_into()?;
-        Ok(self.0.fill_out(content)?)
+        let content: FullContent = self.required.try_into()?;
+        Ok(self.tokens.fill_out(content)?)
+    }
+
+    pub fn required(&self) -> &RequiredContent {
+        &self.required
     }
 }
 
