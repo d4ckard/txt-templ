@@ -236,6 +236,8 @@ impl RequiredContent {
     }
 }
 
+// TODO: Lots of copying is happening here: change this to keep
+// only on string pool
 impl TryInto<FullContent> for RequiredContent {
     type Error = FillOutError;
 
