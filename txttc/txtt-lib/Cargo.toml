@@ -1,5 +1,5 @@
 [package]
-name = "txt-templ-compiler"
+name = "txtt-lib"
 version = "0.1.0"
 edition = "2021"
 

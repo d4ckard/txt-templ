@@ -1,9 +1,9 @@
-use super::scan::{Scanner, ScanError, Action};
-use crate::content::{ContentTokens, ContentToken, Ident};
+use super::scan::{Action, ScanError, Scanner};
+use crate::content::{ContentToken, ContentTokens, Ident};
 use log::debug;
-use unic_locale::Locale;
 #[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use unic_locale::Locale;
 
 // template ::= <locale>? <item>+
 pub fn template(scanner: &mut Scanner) -> Result<ContentTokens, UserError> {
@@ -13,14 +13,14 @@ pub fn template(scanner: &mut Scanner) -> Result<ContentTokens, UserError> {
         Ok(locale) => ContentTokens::from(locale),
         Err(e) => {
             let mut tokens = ContentTokens::new();
-            tokens.add_friendly(e);  // Only raise a waring in case parsing the locale failed.
-                                     // The warning is rasied, because one might have tried to
-                                     // set the locale but failed. If the error was silent, the
-                                     // user would not know about the fact that en-US will be used.
+            tokens.add_friendly(e); // Only raise a waring in case parsing the locale failed.
+                                    // The warning is rasied, because one might have tried to
+                                    // set the locale but failed. If the error was silent, the
+                                    // user would not know about the fact that en-US will be used.
             tokens
-        },
+        }
     };
-    
+
     let e = loop {
         match item(scanner) {
             Ok(token) => tokens.push(token),
@@ -49,30 +49,28 @@ pub fn item(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
     debug!("Sequence: {:?}", &sequence);
 
     match sequence {
-        Ok(sequence) => {
-            match sequence.as_str() {
-                "${" => match option(scanner) {
-                    Ok(token) => Ok(token),
-                    Err(e) => Err(e),
-                },
-                "$" => match constant(scanner) {
-                    Ok(token) => Ok(token),
-                    Err(e) => Err(e),
-                },
-                "{" => match key(scanner) {
-                    Ok(token) => Ok(token),
-                    Err(e) => Err(e),
-                },
-                _ => match text(scanner) {
-                    Ok(text) => Ok(ContentToken::Text(text)),
-                    Err(e) => Err(e),
-                }
-            }
+        Ok(sequence) => match sequence.as_str() {
+            "${" => match option(scanner) {
+                Ok(token) => Ok(token),
+                Err(e) => Err(e),
+            },
+            "$" => match constant(scanner) {
+                Ok(token) => Ok(token),
+                Err(e) => Err(e),
+            },
+            "{" => match key(scanner) {
+                Ok(token) => Ok(token),
+                Err(e) => Err(e),
+            },
+            _ => match text(scanner) {
+                Ok(text) => Ok(ContentToken::Text(text)),
+                Err(e) => Err(e),
+            },
         },
         Err(e) => Err(UserError {
-                parse_error: ParseError::LexicalError(e),
-                context: ContextMsg::EmptyInput,
-                possible: PossibleMsg::None,
+            parse_error: ParseError::LexicalError(e),
+            context: ContextMsg::EmptyInput,
+            possible: PossibleMsg::None,
         }),
     }
 }
@@ -86,7 +84,7 @@ pub fn locale(scanner: &mut Scanner) -> Result<Locale, UserError> {
         debug!("Didn't find locale keyword");
         let e = UserError {
             parse_error: ParseError::LexicalError(e),
-            context: ContextMsg::InvalidContainedIn(format!("keyword {}", LOCALE_KEYWORD)),
+            context: ContextMsg::InvalidContainedIn(format!("keyword {LOCALE_KEYWORD}")),
             possible: PossibleMsg::DidYouMean(LOCALE_KEYWORD.to_owned()),
         };
         return Err(e);
@@ -95,10 +93,13 @@ pub fn locale(scanner: &mut Scanner) -> Result<Locale, UserError> {
         // Scan any number if whitespace characters. Nothing will
         // happen is none are encountered.
         scanner.begin();
-        if scanner.scan(|symbol| match symbol {
-            any if any.is_whitespace() => Some(Action::Request),
-            _ => None,
-        }).is_ok() {
+        if scanner
+            .scan(|symbol| match symbol {
+                any if any.is_whitespace() => Some(Action::Request),
+                _ => None,
+            })
+            .is_ok()
+        {
             // The new scan layer at the start of this closure will not
             // be commit or destroyed if the callback was successful.
             // We commit here to continue after the last whitespace character.
@@ -113,7 +114,9 @@ pub fn locale(scanner: &mut Scanner) -> Result<Locale, UserError> {
         let e = UserError {
             parse_error: ParseError::LexicalError(e),
             context: ContextMsg::InvalidContainedIn("locale setting".to_owned()),
-            possible: PossibleMsg::DidYouForget("to add a colon between the locale keyword and literal".to_owned()),
+            possible: PossibleMsg::DidYouForget(
+                "to add a colon between the locale keyword and literal".to_owned(),
+            ),
         };
         return Err(e);
     };
@@ -176,7 +179,7 @@ pub fn text(scanner: &mut Scanner) -> Result<String, UserError> {
                 possible: PossibleMsg::ForbiddenAre("'{', '}' or '$'".to_owned()),
             };
             return Err(e);
-        },
+        }
     };
     scanner.commit();
     debug!("Successfully finished text");
@@ -199,10 +202,12 @@ pub fn chars(scanner: &mut Scanner) -> Result<String, UserError> {
             let e = UserError {
                 parse_error: ParseError::LexicalError(e),
                 context: ContextMsg::InvalidContainedIn("characters section".to_owned()),
-                possible: PossibleMsg::ForbiddenAre("'{', '}', '$' or whitespace characters".to_owned()),
+                possible: PossibleMsg::ForbiddenAre(
+                    "'{', '}', '$' or whitespace characters".to_owned(),
+                ),
             };
             return Err(e);
-        },
+        }
     };
     scanner.commit();
     debug!("Successfully finished chars");
@@ -232,18 +237,14 @@ pub fn key(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
                 possible: PossibleMsg::AllowedAre("'A'-'Z', 'a'-'z' and '0'-'9'".to_owned()),
             };
             return Err(e);
-        },
+        }
     };
     let default = match default(scanner) {
-        Ok(default) => if let Some(token) = default {
-            Some(Box::new(token))
-        } else {
-            None
-        },
+        Ok(default) => default.map(Box::new),
         Err(e) => {
             debug!("Failed to finish key (incorrect default)");
             return Err(e);
-        },
+        }
     };
     if let Err(e) = scanner.take(Terminals::RBrace.into()) {
         debug!("Failed to finish key (Missing RBrace)");
@@ -263,7 +264,7 @@ pub fn key(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
 pub fn default(scanner: &mut Scanner) -> Result<Option<ContentToken>, UserError> {
     debug!("Starting default");
     scanner.begin();
-    if let Err(_) = scanner.take(':') {
+    if scanner.take(':').is_err() {
         debug!("Failed to finish default (Missing colon)");
         return Ok(None);
     }
@@ -273,7 +274,7 @@ pub fn default(scanner: &mut Scanner) -> Result<Option<ContentToken>, UserError>
             debug!("Failed to finish default (incorrect item)");
             e.context = ContextMsg::InvalidContainedIn("default for key".to_owned());
             return Err(e);
-        },
+        }
     };
     scanner.commit();
     debug!("Successfully finished default");
@@ -281,7 +282,7 @@ pub fn default(scanner: &mut Scanner) -> Result<Option<ContentToken>, UserError>
 }
 
 // <ident> ::= (<char> | [0-9])+
-// <char> ::= ([A-Z] | [a-z])   
+// <char> ::= ([A-Z] | [a-z])
 pub fn ident(scanner: &mut Scanner) -> Result<Ident, ParseError> {
     debug!("Starting ident");
     let ident = match scanner.scan(|symbol| match symbol as u8 {
@@ -295,7 +296,7 @@ pub fn ident(scanner: &mut Scanner) -> Result<Ident, ParseError> {
         }
     };
     debug!("Successfully finished ident");
-    Ok(Ident::from(ident))
+    Ok(ident) // No `Ident::from` required because `Ident` is the same as `String`
 }
 
 // <option> ::= "$" <key>
@@ -317,7 +318,7 @@ pub fn option(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
             debug!("Failed to finish options (incorrect ident)");
             e.context = ContextMsg::InvalidContainedIn("identifier of option".to_owned());
             return Err(e);
-        },
+        }
     };
     scanner.commit();
     debug!("Successfully finished option");
@@ -352,7 +353,7 @@ pub fn constant(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
     };
     scanner.commit();
     debug!("Successfully finished constant");
-    Ok(ContentToken::Constant(ident))    
+    Ok(ContentToken::Constant(ident))
 }
 
 // Terminal-symbol representation
@@ -361,12 +362,12 @@ pub fn constant(scanner: &mut Scanner) -> Result<ContentToken, UserError> {
 pub enum Terminals {
     LBrace = b'{',
     RBrace = b'}',
-    Cash   = b'$',
+    Cash = b'$',
 }
 
-impl Into<char> for Terminals {
-    fn into(self) -> char {
-        self as u8 as char
+impl From<Terminals> for char {
+    fn from(from: Terminals) -> Self {
+        from as u8 as Self
     }
 }
 
@@ -380,27 +381,27 @@ pub trait Symbol {
 
 impl Symbol for char {
     fn is_terminal(&self) -> bool {
-        match self {
-            '{' | '}' | '$' => true,
-            _ => false,
-        }
+        matches!(self, '{' | '}' | '$')
     }
 }
-
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserError {
     parse_error: ParseError,
     context: ContextMsg,
-    possible: PossibleMsg,  // Info on the possible characters
+    possible: PossibleMsg, // Info on the possible characters
 }
 
 impl std::error::Error for UserError {}
 
 impl std::fmt::Display for UserError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: {}\n{}", self.context, self.parse_error, self.possible)
+        write!(
+            f,
+            "{}: {}\n{}",
+            self.context, self.parse_error, self.possible
+        )
     }
 }
 
@@ -417,9 +418,9 @@ impl From<ParseError> for UserError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 enum ContextMsg {
-    InvalidContainedIn(String),  // Invalid  character(s) conatined in {identifier for key}
-    InvalidOpeningOf(String),  // Invalid opening character of {key}
-    InvalidClosingOf(String),  // Invalid closing character of {key}
+    InvalidContainedIn(String), // Invalid  character(s) conatined in {identifier for key}
+    InvalidOpeningOf(String),   // Invalid opening character of {key}
+    InvalidClosingOf(String),   // Invalid closing character of {key}
     EmptyInput,
     None,
 }
@@ -427,21 +428,21 @@ enum ContextMsg {
 impl std::fmt::Display for ContextMsg {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ContextMsg::InvalidContainedIn(target) => {
-                write!(f, "Found invalid character(s) contained in {}", target)
-            },
-            ContextMsg::InvalidOpeningOf(target) => {
-                write!(f, "Found invalid opening character for {}", target)
-            },
-            ContextMsg::InvalidClosingOf(target) => {
-                write!(f, "Found invalid closing character for {}", target)
-            },
-            ContextMsg::EmptyInput => {
+            Self::InvalidContainedIn(target) => {
+                write!(f, "Found invalid character(s) contained in {target}")
+            }
+            Self::InvalidOpeningOf(target) => {
+                write!(f, "Found invalid opening character for {target}")
+            }
+            Self::InvalidClosingOf(target) => {
+                write!(f, "Found invalid closing character for {target}")
+            }
+            Self::EmptyInput => {
                 write!(f, "Cannot process an empty input")
             }
-            ContextMsg::None => {
+            Self::None => {
                 write!(f, "")
-            },
+            }
         }
     }
 }
@@ -459,21 +460,21 @@ enum PossibleMsg {
 impl std::fmt::Display for PossibleMsg {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            PossibleMsg::DidYouMean(maybe) => {
-                write!(f, "Did you maybe mean '{}'?", maybe)
-            },
-            PossibleMsg::DidYouForget(maybe) => {
-                write!(f, "Did you maybe forget {}?", maybe)
+            Self::DidYouMean(maybe) => {
+                write!(f, "Did you maybe mean '{maybe}'?")
             }
-            PossibleMsg::AllowedAre(allowed) => {
-                write!(f, "Allowed characters are {}", allowed)
-            },
-            PossibleMsg::ForbiddenAre(forbidden) => {
-                write!(f, "Forbidden characters are {}", forbidden)
-            },
-            PossibleMsg::None => {
+            Self::DidYouForget(maybe) => {
+                write!(f, "Did you maybe forget {maybe}?")
+            }
+            Self::AllowedAre(allowed) => {
+                write!(f, "Allowed characters are {allowed}")
+            }
+            Self::ForbiddenAre(forbidden) => {
+                write!(f, "Forbidden characters are {forbidden}")
+            }
+            Self::None => {
                 write!(f, "")
-            },
+            }
         }
     }
 }
@@ -485,7 +486,7 @@ pub enum ParseError {
     LexicalError(#[from] ScanError),
     #[error(transparent)]
     #[cfg_attr(feature = "serde", serde(skip_serializing, skip_deserializing))]
-    LocaleError(#[from] unic_locale::parser::ParserError),    
+    LocaleError(#[from] unic_locale::parser::ParserError),
 }
 
 #[cfg(test)]
@@ -505,16 +506,25 @@ mod tests {
         #[test]
         fn locales_are_accepted_and_correct() {
             let cases = vec![
-                ("locale \n :  \t en_us\n", "Delimiter can be surrounded by whitespaces", "en-US"),
+                (
+                    "locale \n :  \t en_us\n",
+                    "Delimiter can be surrounded by whitespaces",
+                    "en-US",
+                ),
                 ("locale:fr-FR\n", "Whitespaces are optional", "fr-FR"),
             ];
             for (variant, case, locale_str) in cases {
                 let mut scanner = Scanner::new(variant);
-                let locale_result = locale(&mut scanner)
-                    .expect(&format!("Valid locale setting was falsely rejected. Case: {}", case));
+                let locale_result = locale(&mut scanner).expect(&format!(
+                    "Valid locale setting was falsely rejected. Case: {}",
+                    case
+                ));
                 let locale_expected: Locale = locale_str.parse().unwrap();
-                assert_eq!(locale_result, locale_expected,
-                    "Accepted locale setting did not return the expected locale. Case: {}", case);
+                assert_eq!(
+                    locale_result, locale_expected,
+                    "Accepted locale setting did not return the expected locale. Case: {}",
+                    case
+                );
             }
 
             // Ensure the locale setting itself is optional
@@ -527,14 +537,14 @@ mod tests {
         fn defaults_are_accepted() {
             Lazy::force(&helper::LOGGING);
             let key_defaults = vec![
-                "{name:hallo}",  // `text` default for key
-                "{name:$Me}",  // `constant` default for key
-                "{name:${Someone}}",  // `option` default for key
-                "{name:${Kontake:Müller}}",  // `text` default for `option` default for `key`
+                "{name:hallo}",              // `text` default for key
+                "{name:$Me}",                // `constant` default for key
+                "{name:${Someone}}",         // `option` default for key
+                "{name:${Kontake:Müller}}", // `text` default for `option` default for `key`
             ];
             helper::test_correct_variants(key, key_defaults);
             let opt_defaults = vec![
-                "${Someone:{name}}",  // `key` default for option
+                "${Someone:{name}}", // `key` default for option
             ];
             helper::test_correct_variants(option, opt_defaults);
         }
@@ -583,8 +593,11 @@ mod tests {
         #[test]
         fn texts_are_accepted() {
             let texts = vec![
-                "Sehr geehrter Herr Foo \n\t iblbl", "\nHallo", "h", "\nllsf\n",
-                ")_!_&_)*@#*^+_[]0=082q5-=8';,m;,.<''\"",    
+                "Sehr geehrter Herr Foo \n\t iblbl",
+                "\nHallo",
+                "h",
+                "\nllsf\n",
+                ")_!_&_)*@#*^+_[]0=082q5-=8';,m;,.<''\"",
                 "\n \t ",
             ];
             helper::test_correct_variants(text, texts);
@@ -598,9 +611,15 @@ mod tests {
         fn locales_are_rejected() {
             let cases = vec![
                 ("en_US\n", "Locales require `locale` keyword"),
-                ("locale:en-US", "Locales require newline behind locale string"),
+                (
+                    "locale:en-US",
+                    "Locales require newline behind locale string",
+                ),
                 ("locale en-US\n", "Locales require colon delimiter"),
-                (" anything locale:en-US\n", "Locale keyword has to be at the very start of the file"),
+                (
+                    " anything locale:en-US\n",
+                    "Locale keyword has to be at the very start of the file",
+                ),
             ];
             helper::test_incorrect_cases(locale, cases);
         }
@@ -634,7 +653,10 @@ mod tests {
                 ("$name", "is missing the braces"),
                 ("{name}", "is missing the dollar sign"),
                 ("${}", "is missing an identifier"),
-                ("$ {name}", "has a whitespace between the dollar sign and the first brace"),
+                (
+                    "$ {name}",
+                    "has a whitespace between the dollar sign and the first brace",
+                ),
             ];
             helper::test_incorrect_cases(option, cases);
         }
@@ -642,7 +664,10 @@ mod tests {
         #[test]
         fn constants_are_rejected() {
             let cases = vec![
-                ("$ name", "has a whitespace between the dollar sign and the ident"),
+                (
+                    "$ name",
+                    "has a whitespace between the dollar sign and the ident",
+                ),
                 ("${name}", "has braces around it's ident"),
             ];
             helper::test_incorrect_cases(constant, cases);
@@ -669,9 +694,9 @@ mod tests {
         pub fn test_correct_variants<T, E>(
             parse_fn: fn(&mut Scanner) -> Result<T, E>,
             variants: Vec<&str>,
-        )
-        where
-            T: std::fmt::Debug, E: std::error::Error
+        ) where
+            T: std::fmt::Debug,
+            E: std::error::Error,
         {
             for variant in variants {
                 let mut scanner = Scanner::new(&variant);
@@ -700,20 +725,19 @@ mod tests {
         pub fn test_incorrect_cases<T, E>(
             parse_fn: fn(&mut Scanner) -> Result<T, E>,
             cases: Vec<(&str, &str)>,
-        )
-        where
-            T: std::fmt::Debug, E: std::error::Error
+        ) where
+            T: std::fmt::Debug,
+            E: std::error::Error,
         {
             for (variant, case) in cases {
                 let mut scanner = Scanner::new(&variant);
                 assert!(
                     parse_fn(&mut scanner).is_err(),
-                    "An invalid variant: '{}' was falsely accepted! Case: {}", 
+                    "An invalid variant: '{}' was falsely accepted! Case: {}",
                     variant,
                     case,
-                );            
+                );
             }
         }
     }
 }
-
