@@ -1,4 +1,4 @@
-# Template spec
+# Template specification
 
 A template may contain four different types of elements:
 
@@ -7,13 +7,13 @@ A template may contain four different types of elements:
   3. [Options](#options)
   4. [Constants](#constants)
 
-Additionally a template may contain an optional
+Additionally, a template may contain an optional
 [locale setting](#locale) at the beginning of the template.
 
 
 ## Text literals
 By default any plain text in a template is considered a text literal.
-Text literals may contain any valid unicode character[^1] except for the characters `{`, `}` and `$`[^2].
+Text literals may contain any valid Unicode character[^1] except for the characters `{`, `}` and `$`[^2].
 When filling out a template, text literals are copied directly into the result.
 
 ### Example
@@ -24,6 +24,7 @@ Hello, my name is Jörg!
 ```
 
 ## Keys
+
 Keys are named variables placed at any position in the template. When filling out the template,
 a text literal needs to be specified by the user for each key. This text literal is then
 substituted at the key's position in the template.
@@ -36,6 +37,7 @@ Hello, my name is {name}!
 ```
 
 ## Options
+
 Options are also named variables, just like keys. But there are two important differences
 between keys and options:
 
@@ -76,6 +78,7 @@ the option `greeting` are required. All possible choices for `greeting` are `h`,
 
 
 ## Constants
+
 Constants are identifiers for *constant* text literals stored in the `UserContentState`.
 For this reason a constant is valid only if its name is found in the `UserContentState`.
 
@@ -103,8 +106,16 @@ Template:
 ${greeting}, my name is $Me! I am here to tell you this {message}.
 ```
 
+### Meta constants
+
+Meta constants are constants whose identifiers are pre-defined to translate to some
+dynamic value which depends on the context of the compilation.
+For example, the meta constant `$now` will be translated into the time of compilation.
+
+
 
 ## Identifiers
+
 Identifiers are used as the names of variable elements (keys, options and constants).
 
 Stricter rules apply to identifiers than to text literals when it comes to the symbols
@@ -124,7 +135,7 @@ they are allowed to contain: identifiers may contain the ASCII symbols A-Z, a-z 
 ### Examples of invalid identifiers
 `my-name` (contains forbidden special character)
 
-`Straße` (contains forbidden unicode character)
+`Straße` (contains forbidden Unicode character)
 
 
 ## Defaults
@@ -159,7 +170,7 @@ ${email:$workemail}
 
 
 ## Locale
-The optional locale setting at the start of the template enabes
+The optional locale setting at the start of the template enables
 language or region specific processing[^5]. If the locale is missing
 from the template, `en-US` is used as the default locale.
 A locale is considered well-formatted if it is a valid
@@ -172,7 +183,7 @@ The colon delimiting the `locale` keyword from the locale string
 may have optional whitespace characters on both sides.
 
 ### Examples
-Slightly different ways of setting a template's locale to german:
+Slightly different ways of setting a template's locale to German:
 
 ```
 locale : de-DE
@@ -186,7 +197,7 @@ Sehr geehrter Herr {name}, ...
 
 
 
-[^1]: More specifically text literals may contain any valid [unicode scalar value](https://www.unicode.org/glossary/#unicode_scalar_value) as text literals are represented as lists of [rust chars](https://doc.rust-lang.org/std/primitive.char.html) internally.
+[^1]: More specifically text literals may contain any valid [Unicode scalar value](https://www.unicode.org/glossary/#unicode_scalar_value) as text literals are represented as lists of [rust chars](https://doc.rust-lang.org/std/primitive.char.html) internally.
 
 [^2]: This could be very inconvenient at times. Especially the `$` symbol is very hard to avoid using in daily use. This needs improvement (Maybe by using the symbol twice: e.g. `$$` (like makefiles)).
 
@@ -194,4 +205,4 @@ Sehr geehrter Herr {name}, ...
 
 [^4]: The default itself may still be of any type, not only of the text literal, but a text literal value must be specified for this element.
 
-[^5]: None if this is implemented at this point but having it enables adding spell checking etc. later on
+[^5]: None if this is implemented at this point but having, it enables adding spell checking etc. later on. Maybe [ltex-ls](https://valentjn.github.io/ltex/index.html) can be used for spell-checking.

@@ -14,9 +14,6 @@ translated into a text literal which is inserted in place of the element.
 More information on all features provided by the format are found in the
 [format specification](Notes/spec.md).
 
-## Next up
+You can compile templates into filled-out text using the `txttc` CLI.
+Check out it's [usage guide](Notes/cli-usage.md) to find out how to use it.
 
- - [x] Parse templates
- - [x] Fill out templates
- - [ ] Fill out and manage templates through a CLI tool
-  - [ ] Refine the public template API

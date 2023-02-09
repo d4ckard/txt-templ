@@ -1,4 +1,15 @@
-# EBNF grammar
+# Miscellaneous
+
+- The expressions *name* and *identifier* are sometimes used interchangeably
+and both refer to what is called an [element's *identifier*](Notes/spec.md#identifiers) in the specification.
+
+## EBNF grammar
+
+This is a rough idea of the grammar accepted by the parser. In practice implementation
+details might vary (E.g. the implementation will accept many more characters than the
+`<char>` rule in this grammar does).
+
+
 
 ```ebnf
 <template>    ::= <locale>? <element>+
