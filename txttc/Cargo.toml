@@ -12,7 +12,6 @@ dirs = "4.0.0"
 env_logger = "0.10.0"
 giveup = "0.1.0"
 log = "0.4.17"
-once_cell = "1.17.0"
 serde = "1.0.152"
 serde_yaml = "0.9.17"
 txtt-lib = { version = "0.1.0", features = ["serde"], path = "../txtt-lib" }

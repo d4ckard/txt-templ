@@ -1,7 +1,6 @@
 use anyhow::Context;
 use clap::Parser;
 use giveup::Giveup;
-use once_cell::sync::Lazy;
 use std::{
     env,
     fs::File,
@@ -9,7 +8,7 @@ use std::{
     path::PathBuf,
     process::Command,
 };
-use txtt_lib::template::{Template, CompilationSettings};
+use txtt_lib::template::{CompilationSettings, Template};
 use txtt_lib::{UserContent, UserContentState};
 
 // The default path to the file which contains the configuration
@@ -119,7 +118,7 @@ impl Inputs<WithUserContentDraft> {
     fn get_user_content_state(ucs_file: &Option<PathBuf>) -> anyhow::Result<UserContentState> {
         // Read the UserContentState file
         let mut file = if let Some(path) = ucs_file {
-            File::open(&path).with_context(|| {
+            File::open(path).with_context(|| {
                 format!(
                     "Failed to open passed content state file {}",
                     path.display()
@@ -138,10 +137,10 @@ impl Inputs<WithUserContentDraft> {
                     let path = dirs::home_dir()
                         .context("Failed to get $HOME directory")?
                         .join(USER_CONTENT_STATE_DEFAULT);
-                    File::open(&path).with_context(|| {
+                    File::open(path).with_context(|| {
                         format!(
-                            "Failed to open default file {} containing the user content state",
-                            USER_CONTENT_STATE_DEFAULT
+                            "Failed to open default file {USER_CONTENT_STATE_DEFAULT} \
+                            containing the user content state"
                         )
                     })?
                 }
@@ -250,7 +249,7 @@ impl Inputs<WithUserContentDraft> {
         match content_file {
             Some(path) => {
                 // Read the user content from the file as YAML
-                File::open(&path)
+                File::open(path)
                     .with_context(|| {
                         format!("Failed to open passed content file {}", path.display())
                     })?
@@ -311,7 +310,8 @@ impl Inputs<WithUserContentDraft> {
 impl Inputs<WithUserContent> {
     // Allow compiling the template after all inputs where assembled successfully
     fn compile(self) -> anyhow::Result<String> {
-        let result = self.template
+        let result = self
+            .template
             .with_settings(self.settings)
             .fill_out(self.uc.0, self.ucs)?;
         log::trace!("Successfully filled out tempalte:\n{}", &result);
@@ -322,7 +322,7 @@ impl Inputs<WithUserContent> {
 // TODO: Copy default literals of keys into YAML
 
 fn main() {
-    Lazy::force(&Lazy::new(|| env_logger::init()));
+    env_logger::init();
 
     let args = Args::parse();
     log::trace!(
@@ -330,11 +330,10 @@ fn main() {
         &args
     );
 
-    let draft = args.draft;  // Copy the value of the draft flag.
-    let content_file = args.content_file.clone();  // Clone the content file path.
-    // Consume the rest of the arguments.
-    let inputs = Inputs::new(args)
-        .giveup("Failed to get static content");
+    let draft = args.draft; // Copy the value of the draft flag.
+    let content_file = args.content_file.clone(); // Clone the content file path.
+                                                  // Consume the rest of the arguments.
+    let inputs = Inputs::new(args).giveup("Failed to get static content");
 
     if draft {
         // Only create the user content draft and write it to stdout.
@@ -351,6 +350,6 @@ fn main() {
             .compile()
             .giveup("Failed to compile template");
 
-        print!("{}", result);
+        print!("{result}");
     }
 }
