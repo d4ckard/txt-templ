@@ -8,6 +8,8 @@ pub struct Template {
     required: RequiredContent,
 }
 
+// TODO: Make dynamic/meta content a library feature.
+
 impl Template {
     // Create a new `Template` instance by parsing the input string
     pub fn parse(s: &str) -> Result<Self, TemplateError> {
@@ -27,8 +29,12 @@ impl Template {
             .add_options(user_content.choices, user_content_state.options);
         self.required.add_keys(user_content.keys);
 
+        // Evaluate all dynamic elements in the requirements.
+        // TODO: Add a switch to enable/disable dynamic content.
+        self.required.eval_dyn();
+
         let content: FullContent = self.required.try_into()?;
-        Ok(self.tokens.fill_out(content)?)
+        Ok(self.tokens.fill_out(content))
     }
 
     pub const fn required(&self) -> &RequiredContent {
@@ -74,12 +80,28 @@ mod tests {
             ucs.map_constant("Mfg", "Mit freundlichen Grüßen");
             let mut uc = UserContent::new();
             uc.map_key("Adressat", "Jessica");
-            uc.map_key("nachricht", "ich bin der Kwisatz Haderach");
+            uc.map_key("nachricht", "ich bin tatsächlich der Kwisatz Haderach");
             uc.map_choice("Anrede", "w");
             helper::test_fill_out("${Anrede} {Adressat}, {nachricht}\n$Mfg\n$Ich",
-                "Sehr geehrte Frau Jessica, ich bin der Kwisatz Haderach\nMit freundlichen Grüßen\nPaul",
+                "Sehr geehrte Frau Jessica, ich bin tatsächlich der Kwisatz Haderach\nMit freundlichen Grüßen\nPaul",
                 "Atreides example message",
                 uc, ucs);
+        }
+        {
+            // This example uses meta constants to substitute dynamic information on
+            // the current date in the template.
+            use chrono::Utc;
+            let now = Utc::now();
+            let month = now.format("%B");
+            let day = now.format("%d");
+            let day_name = now.format("%A");
+            helper::test_fill_out(
+                "This template was compiled on $Month $DayNum which is a $Day",
+                &format!("This template was compiled on {month} {day} which is a {day_name}"),
+                "Dynamic meta content example",
+                UserContent::new(),
+                UserContentState::new(),
+            );
         }
     }
 
@@ -129,7 +151,17 @@ mod tests {
                 UserContentState::new(),
             );
         }
-
+        {
+            let mut ucs = UserContentState::new();
+            ucs.map_constant("me", "Paul");
+            helper::test_fill_out(
+                "{from:$me}",
+                "Paul",
+                "Constant is resolved as a default",
+                UserContent::new(),
+                ucs,
+            );
+        }
         {
             let mut uc = UserContent::new();
             uc.map_key("another", "another-literal");
@@ -178,6 +210,7 @@ mod tests {
     }
 
     // Test cases asserting all requirements for default *from the spec* are met
+
     #[test]
     fn defaults_are_used_if_value_is_not_specified() {
         {
@@ -313,23 +346,26 @@ mod tests {
             );
         }
     }
+}
 
-    mod helper {
-        use super::*;
+/// Module with template test helpers which is public to the crate
+/// so any test can use it
+#[cfg(test)]
+pub(crate) mod helper {
+    use super::*;
 
-        // Assert that filling out is correct
-        pub fn test_fill_out(
-            input: &str,
-            expected: &str,
-            case: &str,
-            user_content: UserContent,
-            user_content_state: UserContentState,
-        ) {
-            let result = Template::parse(input)
-                .unwrap()
-                .fill_out(user_content, user_content_state)
-                .unwrap();
-            assert_eq!(&result, expected, "Test case: {}", case);
-        }
+    // Assert that filling out is correct
+    pub fn test_fill_out(
+        input: &str,
+        expected: &str,
+        case: &str,
+        user_content: UserContent,
+        user_content_state: UserContentState,
+    ) {
+        let result = Template::parse(input)
+            .unwrap()
+            .fill_out(user_content, user_content_state)
+            .unwrap();
+        assert_eq!(&result, expected, "Test case: {}", case);
     }
 }

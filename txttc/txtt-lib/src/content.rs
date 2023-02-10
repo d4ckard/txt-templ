@@ -1,5 +1,7 @@
+mod meta;
 mod parse;
 mod scan;
+use meta::MetaExt;
 pub use parse::UserError;
 use scan::Scanner;
 
@@ -198,6 +200,23 @@ impl RequiredContent {
         }
     }
 
+    /// Evaluate all dynamic elements in `self`. At the current stage
+    /// this method will evaluate all meta constants.
+    pub fn eval_dyn(&mut self) {
+        if let Some(required) = self.0.get_mut(&ContentType::Constant) {
+            // For each entry, check if the entrie's identifier is the
+            // identifier of a meta element. If it is, replace the current
+            // content with the content of the meta element.
+            for (ident, content_value) in required {
+                if let Some(meta) = ident.as_meta() {
+                    // Fill in the meta value.
+                    let meta_content = Content::from(meta);
+                    *content_value = ContentRequirement::Literal(meta_content);
+                }
+            }
+        }
+    }
+
     // Return an instance of user content which contains all required entires
     // and their respective content literals if there are some.
     pub fn draft_user_content(&self) -> UserContent {
@@ -249,8 +268,6 @@ impl Default for RequiredContent {
     }
 }
 
-// TODO: Lots of copying is happening here: change this to keep
-// only on string pool
 impl TryInto<FullContent> for RequiredContent {
     type Error = FillOutError;
 
@@ -376,20 +393,16 @@ impl ContentTokens {
 
     // Use the content map to substitue all values in `tokens` until
     // the entire template has been filled out.
-    pub fn fill_out(&self, content: FullContent) -> Result<String, FillOutError> {
+    pub fn fill_out(&self, content: FullContent) -> String {
         let mut output = String::new();
 
         // Try to add the content for `token` to `output`
-        fn fill_out_token(
-            token: &ContentToken,
-            content: &FullContent,
-            output: &mut String,
-        ) -> Result<(), FillOutError> {
+        fn fill_out_token(token: &ContentToken, content: &FullContent, output: &mut String) {
             match token {
                 ContentToken::Text(text) => output.push_str(text),
                 ContentToken::Constant(ident) => {
                     let content = content.get(ContentIndex::new(ContentType::Constant, ident));
-                    output.push_str(content.as_ref());
+                    output.push_str(content);
                 }
                 ContentToken::Key(ident, _) => {
                     output.push_str(content.get(ContentIndex::new(ContentType::Key, ident)));
@@ -407,13 +420,13 @@ impl ContentTokens {
                     );
                 }
             }
-            Ok(())
         }
 
         for token in &self.tokens {
-            fill_out_token(token, &content, &mut output)?;
+            fill_out_token(token, &content, &mut output);
         }
-        Ok(output)
+
+        output
     }
 
     // Return a half-empty `RequiredContent` instance containing the identifiers and

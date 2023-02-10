@@ -30,17 +30,18 @@ const TEMP_FILE_NAME: &str = "content.yaml";
 #[derive(Parser, Debug)]
 #[command(about = "Fill out templates")]
 struct Args {
-    /// List of paths to template files
-    #[arg(long = "template", short, value_name = "FILE")]
+    /// Path to the template to be compiled. This argument is always required
+    #[arg(long = "template", short, value_name = "template file")]
     template_file: PathBuf,
-    /// Path to content state file
-    #[arg(long = "content-state", short, value_name = "FILE")]
+    /// Path to a content state file to be used instead of the default one
+    #[arg(long = "content-state", short = 'C', value_name = "content state file")]
     content_state_file: Option<PathBuf>,
-    /// Path to content file
-    #[arg(long = "content", short = 'C', value_name = "FILE")]
+    /// Path to a content file to be used instead of prompting the user
+    /// to enter the content
+    #[arg(long = "content", short, value_name = "content file")]
     content_file: Option<PathBuf>,
     /// Write the content draft to stdout. This will not compile the template
-    /// and will irgnore the `content_file` flag.
+    /// and will irgnore the `content` flag
     #[arg(long, short)]
     draft: bool,
 }
@@ -111,7 +112,7 @@ impl Inputs<WithUserContentDraft> {
                 )
             })?
         } else {
-            // User environment or default because the user did not specify a path
+            // Use environment or default because the user did not specify a path.
             match env::var(USER_CONTENT_STATE_FILE_ENV) {
                 Ok(file_name) => File::open(&file_name).with_context(|| {
                     format!(
@@ -301,7 +302,7 @@ impl Inputs<WithUserContent> {
     }
 }
 
-// TODO: Write a usage guide of the CLI
+// TODO: Copy default literals of keys into YAML
 
 fn main() {
     Lazy::force(&Lazy::new(|| env_logger::init()));
