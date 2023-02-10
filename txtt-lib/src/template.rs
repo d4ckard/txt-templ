@@ -8,37 +8,40 @@ pub struct Template {
     required: RequiredContent,
 }
 
-// TODO: Make dynamic/meta content a library feature.
-
 impl Template {
-    // Create a new `Template` instance by parsing the input string
+    /// Create a new `Template` instance by parsing the input string
     pub fn parse(s: &str) -> Result<Self, TemplateError> {
         let tokens: ContentTokens = s.parse()?;
         let required = tokens.draft();
         Ok(Self { tokens, required })
     }
 
-    // Fill out the template
+    /// Compile the template using the default settings.
     pub fn fill_out(
-        mut self,
+        self,
         user_content: UserContent,
         user_content_state: UserContentState,
     ) -> Result<String, TemplateError> {
-        self.required.add_constants(user_content_state.constants);
-        self.required
-            .add_options(user_content.choices, user_content_state.options);
-        self.required.add_keys(user_content.keys);
-
-        // Evaluate all dynamic elements in the requirements.
-        // TODO: Add a switch to enable/disable dynamic content.
-        self.required.eval_dyn();
-
-        let content: FullContent = self.required.try_into()?;
-        Ok(self.tokens.fill_out(content))
+        // Delegate the compilation to a `TemplateWithSettings` instance
+        // with a default settings field.
+        let with_settings = TemplateWithSettings {
+            template: self,
+            settings: CompilationSettings::default(),
+        };
+        with_settings.fill_out(user_content, user_content_state)
     }
 
+    #[inline]
     pub const fn required(&self) -> &RequiredContent {
         &self.required
+    }
+
+    #[inline]
+    pub fn with_settings(self, settings: CompilationSettings) -> TemplateWithSettings {
+        TemplateWithSettings {
+            template: self,
+            settings,
+        }
     }
 }
 
@@ -49,6 +52,56 @@ pub enum TemplateError {
     UserError(#[from] UserError),
     #[error(transparent)]
     FillOutError(#[from] FillOutError),
+}
+
+/// Settings for compiling a template.
+#[derive(Debug)]
+pub struct CompilationSettings {
+    /// If set dynamic elements (i.e. meta constants) will be ignored
+    /// and treated as regular elements.
+    pub ignore_dynamics: bool,
+}
+
+impl std::default::Default for CompilationSettings {
+    fn default() -> Self {
+        Self {
+            ignore_dynamics: false,
+        }
+    }
+}
+
+/// Combination of a template with the some compilation settings.
+#[derive(Debug)]
+pub struct TemplateWithSettings {
+    template: Template,
+    settings: CompilationSettings,
+}
+
+impl TemplateWithSettings {
+    /// Compile a template, considering the given settings.
+    /// This method is the only way to compile a template. The `Template::fill_out` method
+    /// simply creates a new `TemplateWithSettings` instance (with the default settings)
+    /// and then calls this method.
+    pub fn fill_out(
+        self,
+        user_content: UserContent,
+        user_content_state: UserContentState,
+    ) -> Result<String, TemplateError> {        
+        let mut required = self.template.required;
+        required.add_constants(user_content_state.constants);
+        required.add_options(user_content.choices, user_content_state.options);
+        required.add_keys(user_content.keys);
+
+        let settings = self.settings;
+        if settings.ignore_dynamics == false {
+            // Evaluate all dynamic elements in the requirements.
+            // `eval_dyn` does nothing if the "dyn" feature is disabled.
+            required.eval_dyn();
+        }
+
+        let content: FullContent = required.try_into()?;
+        Ok(self.template.tokens.fill_out(content))
+    }
 }
 
 #[cfg(test)]
@@ -87,6 +140,7 @@ mod tests {
                 "Atreides example message",
                 uc, ucs);
         }
+        #[cfg(feature = "dyn")]
         {
             // This example uses meta constants to substitute dynamic information on
             // the current date in the template.

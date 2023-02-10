@@ -1,6 +1,8 @@
+#[cfg(feature = "dyn")]
 mod meta;
 mod parse;
 mod scan;
+#[cfg(feature = "dyn")]
 use meta::MetaExt;
 pub use parse::UserError;
 use scan::Scanner;
@@ -202,7 +204,10 @@ impl RequiredContent {
 
     /// Evaluate all dynamic elements in `self`. At the current stage
     /// this method will evaluate all meta constants.
+    /// This method will not do anything, if dynamic elements are diabled
+    /// through the "dyn" flag.
     pub fn eval_dyn(&mut self) {
+        #[cfg(feature = "dyn")]
         if let Some(required) = self.0.get_mut(&ContentType::Constant) {
             // For each entry, check if the entrie's identifier is the
             // identifier of a meta element. If it is, replace the current

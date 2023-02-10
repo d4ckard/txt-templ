@@ -9,7 +9,7 @@ use std::{
     path::PathBuf,
     process::Command,
 };
-use txtt_lib::template::Template;
+use txtt_lib::template::{Template, CompilationSettings};
 use txtt_lib::{UserContent, UserContentState};
 
 // The default path to the file which contains the configuration
@@ -44,6 +44,10 @@ struct Args {
     /// and will irgnore the `content` flag
     #[arg(long, short)]
     draft: bool,
+    /// Ignore dynamic elements and treat all elements with
+    /// such special identifiers as regular elements
+    #[arg(long, short)]
+    ignore_dyn: bool,
 }
 
 struct WithUserContentDraft(UserContent);
@@ -58,6 +62,7 @@ struct Inputs<S: InputState> {
     // Inputs which are expected to be already persent before the program is stared
     template: Template,
     ucs: UserContentState,
+    settings: CompilationSettings,
     // State to optionally store the user content after it
     // was entered during runtime
     uc: S,
@@ -65,17 +70,26 @@ struct Inputs<S: InputState> {
 
 // Operations performed before getting the user content
 impl Inputs<WithUserContentDraft> {
-    fn new(template_file: &PathBuf, ucs_file: &Option<PathBuf>) -> anyhow::Result<Self> {
-        let template = Self::get_template(template_file)?;
-        let ucs = Self::get_user_content_state(ucs_file)?;
+    fn new(args: Args) -> anyhow::Result<Self> {
+        let template = Self::get_template(&args.template_file)?;
+        let ucs = Self::get_user_content_state(&args.content_state_file)?;
+        let settings = {
+            // Set all settings
+            let mut settings = CompilationSettings::default();
+            if args.ignore_dyn {
+                settings.ignore_dynamics = true;
+            }
+            settings
+        };
 
-        // Calculate the user content draft
+        // Compute the user content draft
         let uc_draft = template.required().draft_user_content();
         let uc_draft = WithUserContentDraft(uc_draft);
 
         Ok(Self {
             template,
             ucs,
+            settings,
             uc: uc_draft,
         })
     }
@@ -287,6 +301,7 @@ impl Inputs<WithUserContentDraft> {
         Ok(Inputs {
             template: self.template,
             ucs: self.ucs,
+            settings: self.settings,
             uc: WithUserContent(uc),
         })
     }
@@ -296,7 +311,9 @@ impl Inputs<WithUserContentDraft> {
 impl Inputs<WithUserContent> {
     // Allow compiling the template after all inputs where assembled successfully
     fn compile(self) -> anyhow::Result<String> {
-        let result = self.template.fill_out(self.uc.0, self.ucs)?;
+        let result = self.template
+            .with_settings(self.settings)
+            .fill_out(self.uc.0, self.ucs)?;
         log::trace!("Successfully filled out tempalte:\n{}", &result);
         Ok(result)
     }
@@ -313,10 +330,13 @@ fn main() {
         &args
     );
 
-    let inputs = Inputs::new(&args.template_file, &args.content_state_file)
+    let draft = args.draft;  // Copy the value of the draft flag.
+    let content_file = args.content_file.clone();  // Clone the content file path.
+    // Consume the rest of the arguments.
+    let inputs = Inputs::new(args)
         .giveup("Failed to get static content");
 
-    if args.draft {
+    if draft {
         // Only create the user content draft and write it to stdout.
         let stdout = io::stdout();
         let handle = stdout.lock();
@@ -326,7 +346,7 @@ fn main() {
     } else {
         // Compile the template as usual
         let result = inputs
-            .get_user_content(&args.content_file)
+            .get_user_content(&content_file)
             .giveup("Failed to get new content")
             .compile()
             .giveup("Failed to compile template");

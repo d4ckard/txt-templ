@@ -173,6 +173,14 @@ To pass it back to `txttc`, the `--content` flag accepts a path to an
 already filled out *draft* file. No editor will be opened if this flag is used, even
 if the given *draft* is missing one or more entries or is otherwise invalid. 
 
+## Miscellaneous flags
+
+### `--ignore-dyn`
+
+If this flag is set dynamic elements will be ignored when compiling the template.
+This means that all elements with such special identifiers (e.g. meta constants)
+will be treated as regular elements and need to be specified manually.
+
 ## Examples
 
 This is the setup for all the following examples:
