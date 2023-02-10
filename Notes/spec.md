@@ -110,7 +110,7 @@ ${greeting}, my name is $Me! I am here to tell you this {message}.
 
 Meta constants are constants whose identifiers are pre-defined to translate to some
 dynamic value which depends on the context of the compilation.
-For example, the meta constant `$now` will be translated into the time of compilation.
+For example, the meta constant `$Day` will be translated into the name of the current day in the week.
 
 
 
