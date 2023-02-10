@@ -127,7 +127,7 @@ mod tests {
 
     // Test cases asserting that meta elements work as expected.
 
-    use crate::content::{UserContent, UserContentState};
+    use crate::content::{VolatileContent, ContentState};
     use crate::template::helper::test_fill_out;
 
     #[test]
@@ -139,8 +139,8 @@ mod tests {
                 meta_constant,
                 expected,
                 &format!("Meta constant {meta_constant} evaluation"),
-                UserContent::new(),
-                UserContentState::new(),
+                VolatileContent::new(),
+                ContentState::new(),
             );
         }
     }

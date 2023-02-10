@@ -1,3 +1,3 @@
 mod content;
-pub use content::{UserContent, UserContentState};
+pub use content::{VolatileContent, ContentState};
 pub mod template;

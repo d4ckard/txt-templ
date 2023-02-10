@@ -22,14 +22,14 @@ type Content = String;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct UserContentState {
+pub struct ContentState {
     // Map of constant identifiers to literal content
     pub constants: IdentMap<Content>,
     // Map of option identifiers to choice identifiers to literal content
     pub options: IdentMap<IdentMap<Content>>,
 }
 
-impl UserContentState {
+impl ContentState {
     pub fn new() -> Self {
         Self {
             constants: IdentMap::new(),
@@ -58,7 +58,7 @@ impl UserContentState {
     }
 }
 
-impl Default for UserContentState {
+impl Default for ContentState {
     fn default() -> Self {
         Self::new()
     }
@@ -66,12 +66,12 @@ impl Default for UserContentState {
 
 #[derive(Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct UserContent {
+pub struct VolatileContent {
     pub keys: IdentMap<Content>, // Map of key identifiers to content literals
     pub choices: IdentMap<Ident>, // Map of option identifiers to choice identifers
 }
 
-impl UserContent {
+impl VolatileContent {
     pub fn new() -> Self {
         Self {
             keys: IdentMap::new(),
@@ -89,7 +89,7 @@ impl UserContent {
     }
 }
 
-impl Default for UserContent {
+impl Default for VolatileContent {
     fn default() -> Self {
         Self::new()
     }
@@ -222,9 +222,9 @@ impl RequiredContent {
         }
     }
 
-    // Return an instance of user content which contains all required entires
+    // Return an instance of volatile content which contains all required entires
     // and their respective content literals if there are some.
-    pub fn draft_user_content(&self) -> UserContent {
+    pub fn draft_volatile_content(&self) -> VolatileContent {
         // Find the literal associated with the `ContentRequirement` instance or return an empty string
         fn get_literal(
             content: &ContentRequirement,
@@ -250,21 +250,21 @@ impl RequiredContent {
             }
         }
 
-        let mut uc = UserContent::new();
+        let mut vc = VolatileContent::new();
         // Add all key entries
         if let Some(key_entries) = self.0.get(&ContentType::Key) {
             for (ident, content) in key_entries {
-                uc.map_key(ident, &get_literal(content, &self.0));
+                vc.map_key(ident, &get_literal(content, &self.0));
             }
         }
         // Add all choice entires
         if let Some(option_entries) = self.0.get(&ContentType::Option) {
             for (ident, content) in option_entries {
-                uc.map_choice(ident, &get_literal(content, &self.0));
+                vc.map_choice(ident, &get_literal(content, &self.0));
             }
         }
 
-        uc
+        vc
     }
 }
 
@@ -569,61 +569,61 @@ mod tests {
         }
     }
 
-    #[test] // Ensure the `RequiredContent::user_content_draft` methods works as expected
-    fn user_content_drafts_work() {
-        let user_content_draft = |input: &str| {
+    #[test] // Ensure the `RequiredContent::volatile_content_draft` methods works as expected
+    fn volatile_content_drafts_work() {
+        let volatile_content_draft = |input: &str| {
             input
                 .parse::<ContentTokens>()
                 .unwrap()
                 .draft()
-                .draft_user_content()
+                .draft_volatile_content()
         };
 
         {
-            // Options and keys are entered into the user content instance
-            let uc = user_content_draft("{key}${option}");
-            let mut expected_uc = UserContent::new();
-            expected_uc.map_key("key", "");
-            expected_uc.map_choice("option", "");
-            assert_eq!(uc, expected_uc);
+            // Options and keys are entered into the volatile content instance
+            let vc = volatile_content_draft("{key}${option}");
+            let mut expected_vc = VolatileContent::new();
+            expected_vc.map_key("key", "");
+            expected_vc.map_choice("option", "");
+            assert_eq!(vc, expected_vc);
         }
         {
-            // Defaults are copied into the user content instance
-            let uc =
-                user_content_draft("{key:key-default-literal}${option:option-default-literal}");
-            let mut expected_uc = UserContent::new();
-            expected_uc.map_key("key", "key-default-literal");
-            expected_uc.map_choice("option", "option-default-literal");
-            assert_eq!(uc, expected_uc);
+            // Defaults are copied into the volatile content instance
+            let vc =
+                volatile_content_draft("{key:key-default-literal}${option:option-default-literal}");
+            let mut expected_vc = VolatileContent::new();
+            expected_vc.map_key("key", "key-default-literal");
+            expected_vc.map_choice("option", "option-default-literal");
+            assert_eq!(vc, expected_vc);
         }
         {
-            // Nested key defaults are entered into the user content instance
-            let uc = user_content_draft("{key:{defaultKey:default-literal}}");
-            let mut expected_uc = UserContent::new();
-            expected_uc.map_key("key", "default-literal"); // Default literals are propagated
-            expected_uc.map_key("defaultKey", "default-literal");
-            assert_eq!(uc, expected_uc);
+            // Nested key defaults are entered into the volatile content instance
+            let vc = volatile_content_draft("{key:{defaultKey:default-literal}}");
+            let mut expected_vc = VolatileContent::new();
+            expected_vc.map_key("key", "default-literal"); // Default literals are propagated
+            expected_vc.map_key("defaultKey", "default-literal");
+            assert_eq!(vc, expected_vc);
         }
         {
-            // Nested option defaults are entered into the user content instance
-            let uc = user_content_draft("${option:${defaultOption:default-literal}}");
-            let mut expected_uc = UserContent::new();
-            expected_uc.map_choice("option", "default-literal"); // Default literals are propagated
-            expected_uc.map_choice("defaultOption", "default-literal");
-            assert_eq!(uc, expected_uc);
+            // Nested option defaults are entered into the volatile content instance
+            let vc = volatile_content_draft("${option:${defaultOption:default-literal}}");
+            let mut expected_vc = VolatileContent::new();
+            expected_vc.map_choice("option", "default-literal"); // Default literals are propagated
+            expected_vc.map_choice("defaultOption", "default-literal");
+            assert_eq!(vc, expected_vc);
         }
         {
-            // Default constants are skipped/not entered as defaults into the user content instance
-            let uc = user_content_draft("{key:$constant}${option:$constant}");
-            let mut expected_uc = UserContent::new();
-            expected_uc.map_key("key", "");
-            expected_uc.map_choice("option", "");
-            assert_eq!(uc, expected_uc);
+            // Default constants are skipped/not entered as defaults into the volatile content instance
+            let vc = volatile_content_draft("{key:$constant}${option:$constant}");
+            let mut expected_vc = VolatileContent::new();
+            expected_vc.map_key("key", "");
+            expected_vc.map_choice("option", "");
+            assert_eq!(vc, expected_vc);
         }
         {
-            // Constants and text literals are not entered into the user content instance
-            let uc = user_content_draft("$constant some funny text literal! $anotherConstant");
-            assert_eq!(uc, UserContent::new());
+            // Constants and text literals are not entered into the volatile content instance
+            let vc = volatile_content_draft("$constant some funny text literal! $anotherConstant");
+            assert_eq!(vc, VolatileContent::new());
         }
     }
 

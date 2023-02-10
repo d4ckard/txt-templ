@@ -19,8 +19,8 @@ impl Template {
     /// Compile the template using the default settings.
     pub fn fill_out(
         self,
-        user_content: UserContent,
-        user_content_state: UserContentState,
+        volatile_content: VolatileContent,
+        content_state: ContentState,
     ) -> Result<String, TemplateError> {
         // Delegate the compilation to a `TemplateWithSettings` instance
         // with a default settings field.
@@ -28,7 +28,7 @@ impl Template {
             template: self,
             settings: CompilationSettings::default(),
         };
-        with_settings.fill_out(user_content, user_content_state)
+        with_settings.fill_out(volatile_content, content_state)
     }
 
     #[inline]
@@ -84,13 +84,13 @@ impl TemplateWithSettings {
     /// and then calls this method.
     pub fn fill_out(
         self,
-        user_content: UserContent,
-        user_content_state: UserContentState,
+        volatile_content: VolatileContent,
+        content_state: ContentState,
     ) -> Result<String, TemplateError> {        
         let mut required = self.template.required;
-        required.add_constants(user_content_state.constants);
-        required.add_options(user_content.choices, user_content_state.options);
-        required.add_keys(user_content.keys);
+        required.add_constants(content_state.constants);
+        required.add_options(volatile_content.choices, content_state.options);
+        required.add_keys(volatile_content.keys);
 
         let settings = self.settings;
         if settings.ignore_dynamics == false {
@@ -111,34 +111,34 @@ mod tests {
     #[test]
     fn template_examples() {
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_constant("name", "Paul");
-            ucs.map_option("SeeOff", choice!("CU", "See You"));
-            let mut uc = UserContent::new();
-            uc.map_key("other", "Leto");
-            uc.map_choice("SeeOff", "CU");
+            let mut cs = ContentState::new();
+            cs.map_constant("name", "Paul");
+            cs.map_option("SeeOff", choice!("CU", "See You"));
+            let mut vc = VolatileContent::new();
+            vc.map_key("other", "Leto");
+            vc.map_choice("SeeOff", "CU");
             helper::test_fill_out(
                 "Hello {other:Atreides}, I am $name.\n${SeeOff}",
                 "Hello Leto, I am Paul.\nSee You",
                 "Atreides example greeting",
-                uc,
-                ucs,
+                vc,
+                cs,
             );
         }
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_constant("Ich", "Paul");
-            ucs.map_option("Anrede", choice!("m", "Sehr geehrter Herr"));
-            ucs.map_option("Anrede", choice!("w", "Sehr geehrte Frau"));
-            ucs.map_constant("Mfg", "Mit freundlichen Grüßen");
-            let mut uc = UserContent::new();
-            uc.map_key("Adressat", "Jessica");
-            uc.map_key("nachricht", "ich bin tatsächlich der Kwisatz Haderach");
-            uc.map_choice("Anrede", "w");
+            let mut cs = ContentState::new();
+            cs.map_constant("Ich", "Paul");
+            cs.map_option("Anrede", choice!("m", "Sehr geehrter Herr"));
+            cs.map_option("Anrede", choice!("w", "Sehr geehrte Frau"));
+            cs.map_constant("Mfg", "Mit freundlichen Grüßen");
+            let mut vc = VolatileContent::new();
+            vc.map_key("Adressat", "Jessica");
+            vc.map_key("nachricht", "ich bin tatsächlich der Kwisatz Haderach");
+            vc.map_choice("Anrede", "w");
             helper::test_fill_out("${Anrede} {Adressat}, {nachricht}\n$Mfg\n$Ich",
                 "Sehr geehrte Frau Jessica, ich bin tatsächlich der Kwisatz Haderach\nMit freundlichen Grüßen\nPaul",
                 "Atreides example message",
-                uc, ucs);
+                vc, cs);
         }
         #[cfg(feature = "dyn")]
         {
@@ -153,8 +153,8 @@ mod tests {
                 "This template was compiled on $Month $DayNum which is a $Day",
                 &format!("This template was compiled on {month} {day} which is a {day_name}"),
                 "Dynamic meta content example",
-                UserContent::new(),
-                UserContentState::new(),
+                VolatileContent::new(),
+                ContentState::new(),
             );
         }
     }
@@ -163,30 +163,30 @@ mod tests {
     fn idents_do_not_collide_outside_of_types() {
         let ident = "name"; // Same ident used once for each variable-element type
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_constant(ident, "constant-literal");
-            ucs.map_option(ident, choice!("only", "choice-literal"));
-            let mut uc = UserContent::new();
-            uc.map_key(ident, "key-literal");
-            uc.map_choice(ident, "only");
+            let mut cs = ContentState::new();
+            cs.map_constant(ident, "constant-literal");
+            cs.map_option(ident, choice!("only", "choice-literal"));
+            let mut vc = VolatileContent::new();
+            vc.map_key(ident, "key-literal");
+            vc.map_choice(ident, "only");
             helper::test_fill_out(
                 "{name} ${name} $name",
                 "key-literal choice-literal constant-literal",
                 "Identifiers of diffenent types do not collide",
-                uc,
-                ucs,
+                vc,
+                cs,
             );
         }
         {
-            let mut uc = UserContent::new();
-            uc.map_key(ident, "initial key literal");
-            uc.map_key(ident, "last key literal");
+            let mut vc = VolatileContent::new();
+            vc.map_key(ident, "initial key literal");
+            vc.map_key(ident, "last key literal");
             helper::test_fill_out(
                 "{name}",
                 "last key literal",
                 "Identifiers of same type overwrite each other",
-                uc,
-                UserContentState::new(),
+                vc,
+                ContentState::new(),
             );
         }
     }
@@ -195,70 +195,70 @@ mod tests {
     fn template_examples_are_filled_out_correctly() {
         // Random test cases
         {
-            let mut uc = UserContent::new();
-            uc.map_key("name", "Paul");
+            let mut vc = VolatileContent::new();
+            vc.map_key("name", "Paul");
             helper::test_fill_out(
                 "Hello, my name is {name}!",
                 "Hello, my name is Paul!",
                 "Simple key",
-                uc,
-                UserContentState::new(),
+                vc,
+                ContentState::new(),
             );
         }
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_constant("me", "Paul");
+            let mut cs = ContentState::new();
+            cs.map_constant("me", "Paul");
             helper::test_fill_out(
                 "{from:$me}",
                 "Paul",
                 "Constant is resolved as a default",
-                UserContent::new(),
-                ucs,
+                VolatileContent::new(),
+                cs,
             );
         }
         {
-            let mut uc = UserContent::new();
-            uc.map_key("another", "another-literal");
+            let mut vc = VolatileContent::new();
+            vc.map_key("another", "another-literal");
             helper::test_fill_out(
                 "{key:{another:default-literal}}",
                 "another-literal",
                 "Value of nested default correctly overwritten",
-                uc,
-                UserContentState::new(),
+                vc,
+                ContentState::new(),
             );
         }
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_option("opt", choice!("only", "choice-literal"));
+            let mut cs = ContentState::new();
+            cs.map_option("opt", choice!("only", "choice-literal"));
             helper::test_fill_out(
                 "${opt:default-literal}",
                 "default-literal",
                 "Value of default used for option without choice",
-                UserContent::new(),
-                ucs,
+                VolatileContent::new(),
+                cs,
             );
         }
         {
-            let mut uc = UserContent::new();
-            uc.map_key("key", "literal-content");
+            let mut vc = VolatileContent::new();
+            vc.map_key("key", "literal-content");
             helper::test_fill_out(
                 "{key:default-literal}",
                 "literal-content",
                 "Key value overwrites default",
-                uc,
-                UserContentState::new(),
+                vc,
+                ContentState::new(),
             );
         }
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_constant("workemail", "im@work.com");
-            ucs.map_option("email", choice!("private", "im@home.com"));
+            let mut cs = ContentState::new();
+            cs.map_constant("workemail", "im@work.com");
+            cs.map_option("email", choice!("private", "im@home.com"));
             helper::test_fill_out(
                 "${email:$workemail}",
                 "im@work.com",
                 "Default constant used for option without choice",
-                UserContent::new(),
-                ucs,
+                VolatileContent::new(),
+                cs,
             );
         }
     }
@@ -268,14 +268,14 @@ mod tests {
     #[test]
     fn defaults_are_used_if_value_is_not_specified() {
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_option("opt", choice!("only", "choice-literal"));
+            let mut cs = ContentState::new();
+            cs.map_option("opt", choice!("only", "choice-literal"));
             helper::test_fill_out(
                 "${opt:default-literal}",
                 "default-literal",
                 "Defaults are used for unspecified options; option becomes optional",
-                UserContent::new(),
-                ucs,
+                VolatileContent::new(),
+                cs,
             );
         }
         {
@@ -283,8 +283,8 @@ mod tests {
                 "{key:default-literal}",
                 "default-literal",
                 "Defaults are used for unspecified keys; key becomes optional",
-                UserContent::new(),
-                UserContentState::new(),
+                VolatileContent::new(),
+                ContentState::new(),
             );
         }
     }
@@ -292,27 +292,27 @@ mod tests {
     #[test] // "If, however a value is goven for the element, [it] will overwrite the default value"
     fn defaults_are_ignored_if_value_is_specified() {
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_option("opt", choice!("only", "choice-literal"));
-            let mut uc = UserContent::new();
-            uc.map_choice("opt", "only");
+            let mut cs = ContentState::new();
+            cs.map_option("opt", choice!("only", "choice-literal"));
+            let mut vc = VolatileContent::new();
+            vc.map_choice("opt", "only");
             helper::test_fill_out(
                 "${opt:default-literal}",
                 "choice-literal",
                 "Defaults are NOT used for specified options; choice overwrites default",
-                uc,
-                ucs,
+                vc,
+                cs,
             );
         }
         {
-            let mut uc = UserContent::new();
-            uc.map_key("key", "key-literal");
+            let mut vc = VolatileContent::new();
+            vc.map_key("key", "key-literal");
             helper::test_fill_out(
                 "{key:default-literal}",
                 "key-literal",
                 "Defaults are NOT used for specified keys; key overwrites default",
-                uc,
-                UserContentState::new(),
+                vc,
+                ContentState::new(),
             );
         }
     }
@@ -324,43 +324,43 @@ mod tests {
                 "{key:text-literal}",
                 "text-literal",
                 "Text literal elements can be used as defaults",
-                UserContent::new(),
-                UserContentState::new(),
+                VolatileContent::new(),
+                ContentState::new(),
             );
         }
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_constant("constant", "constant-literal");
+            let mut cs = ContentState::new();
+            cs.map_constant("constant", "constant-literal");
             helper::test_fill_out(
                 "{key:$constant}",
                 "constant-literal",
                 "Constant elements can be used as defaults",
-                UserContent::new(),
-                ucs,
+                VolatileContent::new(),
+                cs,
             );
         }
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_option("opt", choice!("only", "choice-literal"));
-            let mut uc = UserContent::new();
-            uc.map_choice("opt", "only");
+            let mut cs = ContentState::new();
+            cs.map_option("opt", choice!("only", "choice-literal"));
+            let mut vc = VolatileContent::new();
+            vc.map_choice("opt", "only");
             helper::test_fill_out(
                 "{key:${opt}}",
                 "choice-literal",
                 "Option elements can be used as defaults",
-                uc,
-                ucs,
+                vc,
+                cs,
             );
         }
         {
-            let mut uc = UserContent::new();
-            uc.map_key("defaultKey", "default-key-literal");
+            let mut vc = VolatileContent::new();
+            vc.map_key("defaultKey", "default-key-literal");
             helper::test_fill_out(
                 "{key:{defaultKey}}",
                 "default-key-literal",
                 "Key elements can be used as defaults",
-                uc,
-                UserContentState::new(),
+                vc,
+                ContentState::new(),
             );
         }
     }
@@ -368,35 +368,35 @@ mod tests {
     #[test] // "Defaults may also be nested"
     fn defaults_may_be_nested() {
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_option("option", choice!("only", "choice-literal"));
+            let mut cs = ContentState::new();
+            cs.map_option("option", choice!("only", "choice-literal"));
             helper::test_fill_out(
                 "{key:${option:default-literal}}",
                 "default-literal",
                 "Simple nesting",
-                UserContent::new(),
-                ucs,
+                VolatileContent::new(),
+                cs,
             );
         }
         /*{  // This currently overflows the stack
-            let mut ucs = UserContentState::new();
-            ucs.map_option("opt1", choice!("only", "choice-literal"));
-            ucs.map_option("opt2", choice!("only", "choice-literal"));
-            helper::test_fill_out("{key:${opt1:${opt2:{key:default-literal}}}}", "default-literal", "Long nesting", UserContent::new(), ucs);
+            let mut cs = ContentState::new();
+            cs.map_option("opt1", choice!("only", "choice-literal"));
+            cs.map_option("opt2", choice!("only", "choice-literal"));
+            helper::test_fill_out("{key:${opt1:${opt2:{key:default-literal}}}}", "default-literal", "Long nesting", VolatileContent::new(), cs);
         }*/
         // Chain of nested elements is stopped if a value was specified for any element in the chain
         {
-            let mut ucs = UserContentState::new();
-            ucs.map_option("opt1", choice!("only", "choice-literal"));
-            ucs.map_option("opt2", choice!("only", "choice-literal"));
-            let mut uc = UserContent::new();
-            uc.map_choice("opt2", "only");
+            let mut cs = ContentState::new();
+            cs.map_option("opt1", choice!("only", "choice-literal"));
+            cs.map_option("opt2", choice!("only", "choice-literal"));
+            let mut vc = VolatileContent::new();
+            vc.map_choice("opt2", "only");
             helper::test_fill_out(
                 "{key:${opt1:${opt2:{key:default-literal}}}}",
                 "choice-literal",
                 "Default chain stopped by value",
-                uc,
-                ucs,
+                vc,
+                cs,
             );
         }
     }
@@ -413,12 +413,12 @@ pub(crate) mod helper {
         input: &str,
         expected: &str,
         case: &str,
-        user_content: UserContent,
-        user_content_state: UserContentState,
+        volatile_content: VolatileContent,
+        content_state: ContentState,
     ) {
         let result = Template::parse(input)
             .unwrap()
-            .fill_out(user_content, user_content_state)
+            .fill_out(volatile_content, content_state)
             .unwrap();
         assert_eq!(&result, expected, "Test case: {}", case);
     }
