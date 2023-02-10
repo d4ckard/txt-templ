@@ -234,16 +234,17 @@ impl RequiredContent {
                 ContentRequirement::None => "".to_owned(),
                 ContentRequirement::Literal(its_lit) => its_lit.clone(),
                 ContentRequirement::Default(default_idx) => {
+                    // Here we need ownership of `default_idx` without moving it.
                     let default_idx = default_idx.clone();
 
-                    let content_opt = match map.get(&default_idx.0) {
-                        Some(entries) => entries.get(&default_idx.1),
-                        None => return "".to_owned(),
-                    };
-
-                    match content_opt {
-                        Some(content) => get_literal(content, map),
+                    // Get the identifier map for the type of the default.
+                    match map.get(&default_idx.0) {
                         None => "".to_owned(),
+                        // Get the content entry for the identifier of the default.
+                        Some(ident_map) => match ident_map.get(&default_idx.1) {
+                            None => "".to_owned(),
+                            Some(content) => get_literal(content, map),
+                        },
                     }
                 }
             }

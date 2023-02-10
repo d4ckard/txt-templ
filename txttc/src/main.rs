@@ -159,18 +159,32 @@ impl Inputs<WithUserContentDraft> {
         Ok(ucs)
     }
 
-    // Get the keys section of the draft  as a YAML string
-    fn keys_yaml(&self) -> anyhow::Result<String> {
-        let yaml = serde_yaml::to_string(&self.uc.0.keys)
+    // Get the keys section of the draft  as a YAML string.
+    // Returns an error if the conversion to YAML failed.
+    // Returns an `Ok(None)` if the `keys` member is empty.
+    fn keys_yaml(&self) -> anyhow::Result<Option<String>> {
+        let keys = &self.uc.0.keys;
+        if keys.is_empty() {
+            return Ok(None)
+        }
+
+        let yaml = serde_yaml::to_string(keys)
             .context("Failed to convert keys section of draft to YAML")?;
-        Ok(yaml)
+        Ok(Some(yaml))
     }
 
-    // Get the choices section of the draft as a YAML string
-    fn choices_yaml(&self) -> anyhow::Result<String> {
-        let yaml = serde_yaml::to_string(&self.uc.0.choices)
+    // Get the choices section of the draft as a YAML string.
+    // Returns an error if the conversion to YAML failed.
+    // Returns an `Ok(None)` if the `choices` member is empty.
+    fn choices_yaml(&self) -> anyhow::Result<Option<String>> {
+        let choices = &self.uc.0.choices;
+        if choices.is_empty() {
+            return Ok(None)
+        }
+
+        let yaml = serde_yaml::to_string(choices)
             .context("Failed to convert choices section of draft to YAML")?;
-        Ok(yaml)
+        Ok(Some(yaml))
     }
 
     // Put additional context and available options into the temporary file which
@@ -179,57 +193,80 @@ impl Inputs<WithUserContentDraft> {
         let indent = || -> String { " ".repeat(2) };
 
         let mut draft_buf = String::new();
-        draft_buf.push_str("keys:\n"); // Begin YAML `keys` section
-        draft_buf.push_str(&format!("{}# <key>: <content>\n", indent()));
-        // Add all key entries from the draft as YAML
-        self.keys_yaml()?.lines().for_each(|line| {
-            draft_buf.push_str(&format!("{}{}\n", indent(), line));
-        });
 
-        draft_buf.push_str("choices:\n"); // Begin YAML `choices` section
-        draft_buf.push_str(&format!("{}# <option>: <choice>\n", indent()));
-        // Add all choice entries from the draft as YAML.
-        // The content field will either be empty or the default content
-        draft_buf.push_str(&format!("{}# Default literals:\n", indent()));
-        self.choices_yaml()?.lines().for_each(|line| {
-            draft_buf.push_str(&format!("{}{}\n", indent(), line));
-        });
+        // Begin `keys` section
+        draft_buf.push_str("keys:\n");
+        match self.keys_yaml()? {
+            // Omit the rest of the keys section from the draft
+            // if the `keys` member of the user content is empty.
+            None => {},
+            // Add the keys section to the draft.
+            Some(keys_yaml) => {
+                draft_buf.push_str(&format!("{}# <key>: <content>\n", indent()));
 
-        draft_buf.push_str(&format!(
-            "\n{}# All available choices \
-            (For each option the last choice not commented out will be used):\n",
-            indent()
-        ));
-        // Write all choices for all options to the file as YAML comments
-        // so the user can quickly uncomment the option they choose
-        const MAX_PREVIEW_LEN: usize = 31; // Maximum length of content preview
-        for (option, choices) in self.ucs.options.iter() {
-            // Check the option is found in the tempalte before adding it
-            if self.uc.0.choices.get(option).is_some() {
-                let mut max_len = usize::MIN;
-                for choice in choices.keys() {
-                    if option.len() + choice.len() > max_len {
-                        max_len = option.len() + choice.len();
+                // Add all key entries from the draft as YAML
+                for line in keys_yaml.lines() {
+                    draft_buf.push_str(&format!("{}{line}\n", indent()));
+                }
+            },
+        }
+
+        // Begin YAML `choices` section
+        draft_buf.push_str("choices:\n");
+        match self.choices_yaml()? {
+            // Omit the rest of the choices section from the draft 
+            // if the `choices` member of the user content is empty.
+            None => {},
+            // Add the choices  sction to the draft.
+            Some(choices_yaml) => {
+                draft_buf.push_str(&format!("{}# <option>: <choice>\n", indent()));
+                
+                // Add all choice entries from the draft as YAML.
+                // The content field will either be empty or the default content.
+                // TODO: Check if the line aboive THIS comment is correct.
+                draft_buf.push_str(&format!("{}# Default literals:\n", indent()));
+                for line in choices_yaml.lines() {
+                    draft_buf.push_str(&format!("{}{line}\n", indent()));
+                }
+
+                draft_buf.push_str(&format!(
+                    "\n{}# All available choices \
+                    (For each option the last choice not commented out will be used):\n",
+                    indent()
+                ));
+                // Write all choices for all options to the file as YAML comments
+                // so the user can quickly uncomment the option they choose
+                const MAX_PREVIEW_LEN: usize = 31; // Maximum length of content preview
+                for (option, choices) in self.ucs.options.iter() {
+                    // Check the option is found in the tempalte before adding it
+                    if self.uc.0.choices.get(option).is_some() {
+                        let mut max_len = usize::MIN;
+                        for choice in choices.keys() {
+                            if option.len() + choice.len() > max_len {
+                                max_len = option.len() + choice.len();
+                            }
+                        }
+                        for (choice, content) in choices.iter() {
+                            draft_buf.push_str(&format!("{}# {}: {}", indent(), option, choice));
+                            // Append a comment containing the content associated with the current choice
+                            // Make all comments start on the same column
+                            let space = max_len - (option.len() + choice.len()) + 4;
+                            match content.len() {
+                                0..=MAX_PREVIEW_LEN => draft_buf.push_str(&format!(
+                                    "{}# -> \"{}\"\n",
+                                    " ".repeat(space),
+                                    content
+                                )),
+                                _ => draft_buf.push_str(&format!(
+                                    "{}# -> \"{}\"\n",
+                                    " ".repeat(space),
+                                    &content[..MAX_PREVIEW_LEN - 3]
+                                )),
+                            }
+                        }
                     }
                 }
-                for (choice, content) in choices.iter() {
-                    draft_buf.push_str(&format!("{}# {}: {}", indent(), option, choice));
-                    // Append a comment containing the content associated with the current choice
-                    let space = max_len - (option.len() + choice.len()) + 4; // Make all comments start on the same column
-                    match content.len() {
-                        0..=MAX_PREVIEW_LEN => draft_buf.push_str(&format!(
-                            "{}# -> \"{}\"\n",
-                            " ".repeat(space),
-                            content
-                        )),
-                        _ => draft_buf.push_str(&format!(
-                            "{}# -> \"{}\"\n",
-                            " ".repeat(space),
-                            &content[..MAX_PREVIEW_LEN - 3]
-                        )),
-                    }
-                }
-            }
+            },
         }
 
         file.write_all(draft_buf.as_bytes())
@@ -319,8 +356,6 @@ impl Inputs<WithUserContent> {
     }
 }
 
-// TODO: Copy default literals of keys into YAML
-
 fn main() {
     env_logger::init();
 
@@ -332,7 +367,8 @@ fn main() {
 
     let draft = args.draft; // Copy the value of the draft flag.
     let content_file = args.content_file.clone(); // Clone the content file path.
-                                                  // Consume the rest of the arguments.
+
+    // Consume the rest of the arguments.
     let inputs = Inputs::new(args).giveup("Failed to get static content");
 
     if draft {
